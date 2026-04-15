@@ -2,8 +2,8 @@
 title: "KV Cache Management"
 tags: [memory, kv-cache, vllm-core, offloading]
 created: 2026-04-14
-updated: 2026-04-14
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md]
+updated: 2026-04-15
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md]
 related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md]
 ---
 
@@ -20,10 +20,24 @@ The KV cache stores the key and value tensors for every token in every active se
 3. **Preemption** — when memory is exhausted, lower-priority sequences are evicted (swapped to CPU or recomputed)
 4. **Offloading** — KV blocks can be moved to CPU memory and fetched back when needed
 
-## Recent Developments (vLLM v0.19.0)
-- **General CPU KV cache offloading** — a new mechanism with pluggable cache policy and block-level preemption handling (PRs #37160, #37874, #34805, #36642, #37853)
+## Recent Developments
+
+### vLLM v0.18.0
+- **Smart CPU KV offloading** — stores only frequently-reused KV cache blocks; FlexKV as new offloading backend (source: raw/2026-04-15-vllm-v019-release.md)
+
+### vLLM v0.19.0
+- **General CPU KV cache offloading** — pluggable cache policy interface with block-level preemption handling (PRs #37160, #37874, #34805, #36642, #37853) (source: raw/2026-04-15-vllm-v019-release.md)
 - **KV cache manager rethink** — Q2 2026 roadmap indicates a redesign for complex KV cache layouts
 - **Disk offloading** — planned for the connector API
+
+### Research: Async KV Cache Prefetching (arXiv 2504.06319)
+A new technique orthogonal to vLLM's existing stack: schedule KV cache prefetching into GPU L2 cache during active computation windows, hiding HBM latency behind computation.
+- **2.15× attention kernel efficiency** improvement
+- **Up to 1.97× end-to-end throughput** on NVIDIA H20
+- Surpasses FlashAttention-3 baseline
+- Compatible with PagedAttention and existing kernels (source: raw/2026-04-15-async-kv-prefetch-arxiv.md)
+
+Note: H20 results are relevant because H20 is widely deployed in Chinese cloud (export-control compliant), making this operationally significant for a large portion of production deployments.
 
 ## Key Parameters
 - `gpu_memory_utilization` — fraction of GPU memory for KV cache (default: 0.9; be cautious on shared/cloud GPUs where actual available VRAM may differ from spec)
@@ -39,3 +53,5 @@ The KV cache stores the key and value tensors for every token in every active se
 - How does the new CPU offloading compare to SGLang's approach?
 - What's the right eviction policy for mixed workloads (short vs. long context)?
 - How will disk offloading perform for the KV connector API?
+- Can the async KV prefetch technique (arXiv 2504.06319) be integrated into vLLM's attention kernels? Who would drive it — the SIG Performance team?
+- What does the "KV cache manager rethink" in Q2 2026 actually change about the PagedAttention block abstraction?

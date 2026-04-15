@@ -2,7 +2,7 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-14
+updated: 2026-04-15
 sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md]
 ---
@@ -17,7 +17,7 @@ LLM inference optimization has converged on a core set of techniques that work t
 
 vLLM (v0.19.0 as of April 2026) has become the most widely adopted open-source inference engine. Key recent developments:
 
-- **Model Runner V2 (MRV2)** — a ground-up rewrite of the execution core, released March 2026. Cleaner, more modular, supports CUDA graphs for vision encoders, piecewise CUDA graphs for pipeline parallelism.
+- **Model Runner V2 (MRV2)** — a ground-up rewrite of the execution core; opt-in in v0.18.0 (March 2026), **default in v0.19.0** (April 3, 2026). Cleaner, more modular, GPU-native input preparation, async-first. Delivers 56% throughput gain on GB200 from input prep alone.
 - **V1 Engine** — the default since v0.8.0, delivering 1.7x throughput over the original engine. Prefix caching is now nearly free (<1% overhead at 0% hit rate).
 - **Blackwell support** — full SM120 support as of v0.15.1 (Feb 2026), including NVFP4 MoE kernels.
 - **Compilation** — moving toward `torch.compile` as the default optimization path, with custom Helion kernels planned.

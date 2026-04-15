@@ -2,7 +2,7 @@
 title: "Master Index"
 tags: [index, meta]
 created: 2026-04-14
-updated: 2026-04-14
+updated: 2026-04-15
 ---
 
 # Inference Optimization Knowledge Base — Index
@@ -26,3 +26,4 @@ updated: 2026-04-14
 
 ## Changelog
 - [Week of 2026-04-14](changelog/week-2026-04-14.md) — initial knowledge base seeding
+- [Collect run 2026-04-15](changelog/collect-2026-04-15.md) — vLLM v0.18/v0.19, MRV2 deep-dive, P-EAGLE, async KV prefetch paper
