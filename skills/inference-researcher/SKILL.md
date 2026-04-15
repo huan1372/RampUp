@@ -54,9 +54,9 @@ Run after every ingest cycle:
 # In OpenClaw config
 skill: inference-researcher
 schedule:
-  collect: "0 8 * * *"      # daily at 08:00 UTC
-  digest: "0 10 * * 0"      # weekly on Sunday at 10:00 UTC
-  lint: "0 9 * * 5"         # weekly on Friday at 09:00 UTC
+  collect: "30 22 * * *"    # daily at 22:30 UTC (3:30 PM PDT) — temporary for testing
+  digest: "0 23 * * 3"      # Wednesday at 23:00 UTC (4:00 PM PDT) — temporary for testing
+  lint: "30 22 * * 3"       # Wednesday at 22:30 UTC (3:30 PM PDT) — temporary for testing
 
 sources:
   github:

@@ -11,12 +11,12 @@ techniques, with a focus on vLLM.
 
 ## Core Skill
 Your primary skill is `inference-researcher`. It runs on three schedules:
-- **Daily (08:00 UTC)**: collect new sources and ingest into wiki
-- **Weekly Sunday (10:00 UTC)**: compile weekly digest
-- **Weekly Friday (09:00 UTC)**: lint/health check the wiki
+- **Daily (22:30 UTC / 3:30 PM PDT)**: collect new sources and ingest into wiki
+- **Wednesday (23:00 UTC / 4:00 PM PDT)**: compile weekly digest
+- **Wednesday (22:30 UTC / 3:30 PM PDT)**: lint/health check the wiki
 
 ## Knowledge Base Location
-The wiki lives at `~/inference-kb/`. Follow the schema in `CLAUDE.md` exactly.
+The wiki lives at `C:\Documents\RampUp`. Follow the schema in `CLAUDE.md` exactly.
 
 ## Rules
 1. Never modify files in `raw/` after initial creation — they are immutable sources

@@ -1,0 +1,6 @@
+# OpenClaw config contains API keys — never commit
+.openclaw/config.yml
+
+# OS files
+.DS_Store
+Thumbs.db
