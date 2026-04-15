@@ -5,6 +5,10 @@
 # Memory files (personal, not for repo)
 memory/
 
+# Local tool state — not for repo
+.claude/
+.obsidian/
+
 # OS files
 .DS_Store
 Thumbs.db
