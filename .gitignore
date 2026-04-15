@@ -1,5 +1,9 @@
 # OpenClaw config contains API keys — never commit
 .openclaw/config.yml
+.openclaw/workspace-state.json
+
+# Memory files (personal, not for repo)
+memory/
 
 # OS files
 .DS_Store
