@@ -2,9 +2,9 @@
 title: "FP8 Quantization"
 tags: [quantization, memory, throughput, hardware]
 created: 2026-04-14
-updated: 2026-04-14
+updated: 2026-04-16
 sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md]
-related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md]
+related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md]
 ---
 
 # FP8 Quantization
@@ -44,6 +44,10 @@ Also applies to KV cache: setting `kv_cache_dtype=fp8` halves KV cache memory, e
 - Always on H100/H200/B200 hardware — it's nearly free
 - Especially valuable when KV cache memory is the bottleneck (long contexts, high concurrency)
 - Skip on older hardware without native FP8 tensor cores
+
+## Relationship to KV Cache Quantization
+
+FP8 is the lowest-overhead point on the KV cache compression spectrum. Sub-FP8 approaches (TurboQuant at 2–4 bits, merged into vLLM main April 15, 2026) achieve 2.6–4.9× compression but carry higher compute overhead and quality risk. See [KV Cache Quantization](kv-cache-quantization.md) for the full spectrum.
 
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?

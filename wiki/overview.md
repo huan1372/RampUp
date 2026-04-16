@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md]
+updated: 2026-04-16
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
 ---
 
@@ -31,10 +31,14 @@ Based on Clarifai benchmarks (GPT-OSS-120B on 2x H100):
 
 ## Key Optimization Vectors
 
-1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization
+1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026)
 2. **Compute** — speculative decoding, continuous batching, chunked prefill, fused kernels
 3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving
 4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap
+
+### KV Cache Compression: Expanding Beyond FP8 (April 2026)
+
+TurboQuant (PR #38479, merged April 15, 2026) extends vLLM's KV cache compression below FP8 for the first time. Using WHT rotation on keys and uniform quantization on values, it achieves 2.6–4.9× compression ratios at the cost of higher compute overhead and model-dependent quality risk. The conservative `turboquant_k8v4` preset (FP8 keys, 4-bit values) delivers TPOT improvement on long-context workloads with modest throughput overhead. Aggressive 3-bit compression shows severe quality degradation and requires validation. See [KV Cache Quantization](techniques/kv-cache-quantization.md). (source: raw/2026-04-16-turboquant-kv-compression-pr38479.md)
 
 ## Glossary (quick reference)
 

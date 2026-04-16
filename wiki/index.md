@@ -2,7 +2,7 @@
 title: "Master Index"
 tags: [index, meta]
 created: 2026-04-14
-updated: 2026-04-15
+updated: 2026-04-16
 ---
 
 # Inference Optimization Knowledge Base — Index
@@ -19,6 +19,7 @@ updated: 2026-04-15
 
 ## Techniques
 - [FP8 Quantization](techniques/fp8-quantization.md) — near-free 2x memory reduction
+- [KV Cache Quantization](techniques/kv-cache-quantization.md) — sub-FP8 compression spectrum; TurboQuant 2.6–4.9× (merged Apr 2026)
 - [Speculative Decoding](techniques/speculative-decoding.md) — draft-verify acceleration
 - [Prefix Caching](techniques/prefix-caching.md) — reusing KV cache across requests
 - [Disaggregated Serving](techniques/disaggregated-serving.md) — separating prefill and decode
@@ -28,3 +29,4 @@ updated: 2026-04-15
 - [Week of 2026-04-14](changelog/week-2026-04-14.md) — initial knowledge base seeding
 - [Collect run 2026-04-15](changelog/collect-2026-04-15.md) — vLLM v0.18/v0.19, MRV2 deep-dive, P-EAGLE, async KV prefetch paper
 - [Ingest run 2026-04-15 (ramp-up recap)](changelog/ingest-2026-04-15-rampup-recap.md) — PDF Q&A session ingested; statistical multiplexing, continuous-batching timeline, glossary
+- [Collect run 2026-04-16](changelog/collect-2026-04-16.md) — TurboQuant KV cache compression (PR #38479, merged Apr 15); new kv-cache-quantization page

@@ -2,9 +2,9 @@
 title: "KV Cache Management"
 tags: [memory, kv-cache, vllm-core, offloading]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md]
-related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md]
+updated: 2026-04-16
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md]
+related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md]
 ---
 
 # KV Cache Management
@@ -39,6 +39,16 @@ A new technique orthogonal to vLLM's existing stack: schedule KV cache prefetchi
 
 Note: H20 results are relevant because H20 is widely deployed in Chinese cloud (export-control compliant), making this operationally significant for a large portion of production deployments.
 
+### KV Cache Quantization: TurboQuant (merged April 15, 2026)
+PR #38479 merged sub-FP8 KV cache compression into vLLM main. The technique applies WHT rotation + Lloyd-Max quantization to keys and uniform quantization to values, achieving 2.6–4.9× compression ratios.
+
+- **`turboquant_k8v4`**: 2.6× compression; TPOT faster on long contexts (135.2 ms vs 138.1 ms @ 8K, Qwen3-4B, RTX PRO 6000 Blackwell); 79–100% throughput vs baseline
+- **`turboquant_4bit_nc`**: 3.8× compression; quality risk higher; requires validation
+- **`turboquant_3bit_nc`**: 4.9× compression; 0% GSM8K reported on some models — avoid without extensive testing
+- **Key finding**: asymmetric K/V bit allocation (more bits for keys) consistently outperforms symmetric at the same total budget
+
+Full details at [KV Cache Quantization](../techniques/kv-cache-quantization.md). (source: raw/2026-04-16-turboquant-kv-compression-pr38479.md)
+
 ## Key Parameters
 - `gpu_memory_utilization` — fraction of GPU memory for KV cache (default: 0.9; be cautious on shared/cloud GPUs where actual available VRAM may differ from spec)
 - `swap_space` — CPU memory for swapped-out KV blocks (in GB)
@@ -46,7 +56,8 @@ Note: H20 results are relevant because H20 is widely deployed in Chinese cloud (
 
 ## Relationship to Other Concepts
 - Built on [PagedAttention](paged-attention.md) block abstraction
-- [FP8 Quantization](../techniques/fp8-quantization.md) can compress KV cache by 2x
+- [FP8 Quantization](../techniques/fp8-quantization.md) can compress KV cache by 2× with negligible overhead
+- [KV Cache Quantization](../techniques/kv-cache-quantization.md) covers the full spectrum including TurboQuant (2.6–4.9×)
 - [Prefix Caching](../techniques/prefix-caching.md) is a sharing strategy within this system
 
 ## Open Questions
