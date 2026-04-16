@@ -2,8 +2,8 @@
 title: "PagedAttention"
 tags: [memory, kv-cache, vllm-core, attention]
 created: 2026-04-14
-updated: 2026-04-14
-sources: [raw/vllm-pagedattention-paper.md, raw/vllm-benchmarks-2026.md]
+updated: 2026-04-15
+sources: [raw/vllm-pagedattention-paper.md, raw/vllm-benchmarks-2026.md, raw/2026-04-14-vllm-rampup-recap.md]
 related: [concepts/kv-cache-management.md, techniques/prefix-caching.md, concepts/continuous-batching.md]
 ---
 
@@ -30,9 +30,20 @@ Key mechanisms:
 - `max_num_batched_tokens` — total tokens per forward pass
 
 ## Benchmarks & Numbers
-- Reduces memory waste to under 4% (source: vLLM paper)
+- Reduces memory waste to under 4% (source: vLLM paper, ramp-up recap)
 - Reduces memory usage by up to 55% for parallel sampling and beam search
 - Enables 2-4x higher throughput compared to HuggingFace Transformers baseline
+- Baseline waste without PagedAttention: 60-80% (source: ramp-up recap)
+
+## Key Insight: Statistical Multiplexing
+Not every request hits its maximum sequence length at the same time. A shared pool
+can serve more requests than individual per-request reservations would allow — the
+total pool can actually be **smaller than the sum of all worst-case reservations**
+(source: raw/2026-04-14-vllm-rampup-recap.md).
+
+The `gpu_memory_utilization` parameter (default 0.9) controls how aggressively you
+bet on statistical sharing. Higher values pack more concurrent requests but raise
+the risk of [preemption](kv-cache-management.md) when the pool runs out.
 
 ## Relationship to Other Concepts
 - Enables [Continuous Batching](continuous-batching.md) — without efficient memory, dynamic batching can't work

@@ -27,3 +27,4 @@ updated: 2026-04-15
 ## Changelog
 - [Week of 2026-04-14](changelog/week-2026-04-14.md) — initial knowledge base seeding
 - [Collect run 2026-04-15](changelog/collect-2026-04-15.md) — vLLM v0.18/v0.19, MRV2 deep-dive, P-EAGLE, async KV prefetch paper
+- [Ingest run 2026-04-15 (ramp-up recap)](changelog/ingest-2026-04-15-rampup-recap.md) — PDF Q&A session ingested; statistical multiplexing, continuous-batching timeline, glossary

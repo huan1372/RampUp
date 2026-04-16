@@ -2,8 +2,8 @@
 title: "Chunked Prefill"
 tags: [scheduling, latency, prefill, vllm-core]
 created: 2026-04-14
-updated: 2026-04-14
-sources: [raw/vllm-docs.md]
+updated: 2026-04-15
+sources: [raw/vllm-docs.md, raw/2026-04-14-vllm-rampup-recap.md]
 related: [concepts/continuous-batching.md, techniques/disaggregated-serving.md, concepts/kv-cache-management.md]
 ---
 
@@ -21,6 +21,16 @@ With chunked prefill:
 3. The KV cache for the prompt is built incrementally across multiple iterations
 
 The tradeoff: chunked prefill adds some overhead to total prefill time for that one request, but dramatically improves TTFT and ITL for all other concurrent requests.
+
+**Framing it as fairness:** Chunked prefill is explicitly a fairness mechanism — slightly penalize one heavy request to prevent it from starving dozens of lighter ones (source: raw/2026-04-14-vllm-rampup-recap.md). The phenomenon it prevents is called **head-of-line blocking**: in decode, every request requires reading the full KV cache but only produces one token, so a monopolizing prefill freezes everyone else's ITL.
+
+## Why Prefill Needs Special Handling
+
+Prefill and decode have opposite resource profiles:
+- **Prefill** is compute-bound (GPU arithmetic is the bottleneck, all input tokens processed in parallel)
+- **Decode** is memory-bandwidth-bound (most time spent reading KV cache, only one new token produced per step)
+
+Targets for fluid streaming: **TTFT < 200ms, ITL < 30ms**. Without chunking, a 32K-token prefill can blow past both targets for every other request in the batch (source: raw/2026-04-14-vllm-rampup-recap.md).
 
 ## Key Parameters
 - `max_num_batched_tokens` — effectively controls chunk size

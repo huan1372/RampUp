@@ -3,8 +3,8 @@ title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
 updated: 2026-04-15
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md]
-related: [concepts/paged-attention.md, concepts/model-runner-v2.md]
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md]
+related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
 ---
 
 # Inference Optimization — Overview & Synthesis
@@ -35,6 +35,18 @@ Based on Clarifai benchmarks (GPT-OSS-120B on 2x H100):
 2. **Compute** — speculative decoding, continuous batching, chunked prefill, fused kernels
 3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving
 4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap
+
+## Glossary (quick reference)
+
+- **TTFT** — Time To First Token. Latency from prompt submission to first response token. Measures prefill speed. Target: <200ms.
+- **ITL** — Inter-Token Latency. Time between consecutive output tokens during streaming. Measures decode speed. Target: <30ms.
+- **KV cache** — Stored key-value tensors from attention for all tokens seen so far. See [KV Cache Management](concepts/kv-cache-management.md).
+- **Prefill** — Processing input prompt (parallel, compute-bound).
+- **Decode** — Generating output tokens one at a time (sequential, memory-bandwidth-bound).
+- **Preemption** — Evicting a request's KV blocks when memory runs out (swap to CPU or recompute). See [PagedAttention](concepts/paged-attention.md).
+- **TP** — Tensor Parallelism. Splitting model layers across multiple GPUs. See [Tensor Parallelism](techniques/tensor-parallelism.md).
+
+(source: raw/2026-04-14-vllm-rampup-recap.md)
 
 ## Open Questions
 
