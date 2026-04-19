@@ -2,8 +2,8 @@
 title: "Speculative Decoding"
 tags: [latency, throughput, decoding, speculation]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md]
+updated: 2026-04-19
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md]
 ---
 
@@ -60,9 +60,25 @@ Pre-trained drafter models available for: GPT-OSS 120B, GPT-OSS 20B, Qwen3-Coder
 - When the draft model has a high acceptance rate for the target workload
 - When GPU is underutilized during decode (low-concurrency scenarios)
 
+## Calibrated Speculative Decoding (CSD) — Research (arXiv 2604.13634, April 2026)
+
+CSD is a training-free framework that addresses **false rejections** — cases where the draft model's token is semantically correct but lexically diverges from the target model's top token, causing the standard rejection sampler to discard a valid output.
+
+**Two modules**:
+1. **Online Correction Memory (OCM)**: accumulates rejected (draft token, context) pairs at runtime; identifies recurring divergence patterns and proposes "rescue candidates" drawn from historical rejections
+2. **Semantic Consistency Gating (SCG)**: validates rescue candidates via a probability ratio test (draft / target), admitting only tokens within a calibrated threshold — prevents hallucinated rescues
+
+**Results**: Peak throughput speedup of **2.33×** over baseline speculative decoding across diverse LLMs (exact models not specified). Training-free — plugs into any existing draft-verify pipeline.
+
+**vLLM integration status**: Not yet integrated. Authors explicitly note vLLM integration as needed for production deployment. Implementation requires changes to vLLM's rejection sampler (`vllm/model_executor/layers/spec_decode/`) and addition of a per-worker or global correction memory store.
+
+(source: raw/2026-04-19-calibrated-speculative-decoding-arxiv.md)
+
 ## Open Questions
 - What's the best draft model selection strategy for a given target model?
 - How does EAGLE-3 compare to vanilla speculative decoding in practice?
 - How does spec decode interact with chunked prefill scheduling?
 - Why does P-EAGLE's advantage diminish at high concurrency (c=64)? Is this a batching overhead issue or acceptance rate regression?
 - When will P-EAGLE drafter models be available for more target models beyond GPT-OSS and Qwen3-Coder?
+- Does CSD's 2.33× peak speedup hold at high concurrency, or does it share P-EAGLE's diminishing returns pattern?
+- What is the memory overhead of OCM's correction history at serving scale (thousands of concurrent requests)?

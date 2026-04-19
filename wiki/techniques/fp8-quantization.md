@@ -2,9 +2,9 @@
 title: "FP8 Quantization"
 tags: [quantization, memory, throughput, hardware]
 created: 2026-04-14
-updated: 2026-04-16
+updated: 2026-04-19
 sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md]
-related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md]
+related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md, techniques/fp4-quantization.md]
 ---
 
 # FP8 Quantization
@@ -48,6 +48,10 @@ Also applies to KV cache: setting `kv_cache_dtype=fp8` halves KV cache memory, e
 ## Relationship to KV Cache Quantization
 
 FP8 is the lowest-overhead point on the KV cache compression spectrum. Sub-FP8 approaches (TurboQuant at 2–4 bits, merged into vLLM main April 15, 2026) achieve 2.6–4.9× compression but carry higher compute overhead and quality risk. See [KV Cache Quantization](kv-cache-quantization.md) for the full spectrum.
+
+## Relationship to FP4
+
+FP4 (MXFP4) is the next step below FP8 for model weights, achieving ~4× memory reduction vs BF16. On Blackwell (SM100/SM120), hardware FP4 TensorCores make MXFP4 viable. As of April 2026, vLLM has a new CUTLASS W4A4 MXFP4 MoE kernel (PR #37463) for B200/SM100. See [FP4 Quantization](fp4-quantization.md).
 
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?

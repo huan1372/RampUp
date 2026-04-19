@@ -2,7 +2,7 @@
 title: "Master Index"
 tags: [index, meta]
 created: 2026-04-14
-updated: 2026-04-16
+updated: 2026-04-19
 ---
 
 # Inference Optimization Knowledge Base — Index
@@ -19,8 +19,9 @@ updated: 2026-04-16
 
 ## Techniques
 - [FP8 Quantization](techniques/fp8-quantization.md) — near-free 2x memory reduction
-- [KV Cache Quantization](techniques/kv-cache-quantization.md) — sub-FP8 compression spectrum; TurboQuant 2.6–4.9× (merged Apr 2026)
-- [Speculative Decoding](techniques/speculative-decoding.md) — draft-verify acceleration
+- [FP4 / MXFP4 Quantization](techniques/fp4-quantization.md) — ~4× memory reduction on Blackwell; CUTLASS W4A4 MoE kernel (merged Apr 2026)
+- [KV Cache Quantization](techniques/kv-cache-quantization.md) — sub-FP8 compression spectrum; TurboQuant 2.6–4.9× (merged Apr 2026); WHT overhead reduced (Apr 2026)
+- [Speculative Decoding](techniques/speculative-decoding.md) — draft-verify acceleration; P-EAGLE, CSD (2.33× speedup, Apr 2026)
 - [Prefix Caching](techniques/prefix-caching.md) — reusing KV cache across requests
 - [Disaggregated Serving](techniques/disaggregated-serving.md) — separating prefill and decode
 - [Tensor Parallelism](techniques/tensor-parallelism.md) — splitting models across GPUs
@@ -30,3 +31,4 @@ updated: 2026-04-16
 - [Collect run 2026-04-15](changelog/collect-2026-04-15.md) — vLLM v0.18/v0.19, MRV2 deep-dive, P-EAGLE, async KV prefetch paper
 - [Ingest run 2026-04-15 (ramp-up recap)](changelog/ingest-2026-04-15-rampup-recap.md) — PDF Q&A session ingested; statistical multiplexing, continuous-batching timeline, glossary
 - [Collect run 2026-04-16](changelog/collect-2026-04-16.md) — TurboQuant KV cache compression (PR #38479, merged Apr 15); new kv-cache-quantization page
+- [Collect run 2026-04-19](changelog/collect-2026-04-19.md) — MXFP4 W4A4 CUTLASS MoE kernel (PR #37463); CSD speculative decoding (arXiv 2604.13634); new fp4-quantization page

@@ -2,8 +2,8 @@
 title: "KV Cache Quantization"
 tags: [quantization, kv-cache, memory, compression, turboquant]
 created: 2026-04-16
-updated: 2026-04-16
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md]
+updated: 2026-04-19
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md]
 related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md]
 ---
 
@@ -59,8 +59,9 @@ A sub-4-bit online KV compression approach using asymmetric treatment of keys an
 - No offline preparation required
 - Hardware-accelerated on H100, H200, B200; software fallback on older GPUs
 
-### TurboQuant (as of April 15, 2026)
-- Merged into vLLM main in PR #38479
+### TurboQuant (as of April 19, 2026)
+- Merged into vLLM main in PR #38479 (April 15, 2026)
+- Refined in PR #40194 (April 17-19, 2026): removed redundant random sign flip from the WHT pipeline; this reduces per-token KV quantization overhead without affecting compression quality or preset behavior
 - Targets vLLM V1 attention backend only
 - Flag: `--kv-cache-dtype <preset>` where preset is one of: `turboquant_k8v4`, `turboquant_4bit_nc`, `turboquant_3bit_nc`, `tq_k4v3`
 - No offline calibration required — online compression at inference time
