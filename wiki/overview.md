@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-19
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md]
+updated: 2026-04-20
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
 ---
 
@@ -60,8 +60,21 @@ arXiv 2604.13634 (April 15, 2026) proposes CSD, a training-free addition to spec
 
 (source: raw/2026-04-14-vllm-rampup-recap.md)
 
+### SpecGuard: Step-Level Verification for Reasoning (April 2026)
+
+arXiv 2604.15244 proposes SpecGuard, which extends speculative decoding with step-level verification for multi-step reasoning. Standard spec decode is token-centric — erroneous reasoning steps are accepted and propagate forward. SpecGuard uses model-internal verifier ensembles (no external reward model) to validate each reasoning step and recompute only erroneous steps. Results: +3.6% accuracy, −11% latency vs standard SD. Not yet in vLLM. See [Speculative Decoding](techniques/speculative-decoding.md). (source: raw/2026-04-20-specguard-arxiv-2604-15244.md)
+
+### StreamServe: Disaggregated Serving + Adaptive Speculation (April 2026)
+
+arXiv 2604.09562 combines disaggregated P/D (PipeServe-Engine) with runtime-adaptive speculation depth (SpecuStream). Key insight: static speculation depth K is suboptimal for reasoning tasks where acceptance rates fluctuate mid-sequence. SpecuStream tunes K online from live acceptance signals. On GSM8K: 264 vs 241 tok/s (+9.5% throughput), 0.30 vs 3.50 s (−91% latency) vs TP-vLLM baseline. Overall 11–18× latency reduction across benchmarks. Evaluated on A800 GPUs, small scale (320 queries). See [Disaggregated Serving](techniques/disaggregated-serving.md). (source: raw/2026-04-20-streamserve-arxiv-2604-09562.md)
+
+### Prefill-as-a-Service: Cross-Datacenter Disaggregation via Hybrid Attention (April 2026)
+
+arXiv 2604.15039 (Moonshot AI / Kimi) argues that hybrid-attention architectures produce small enough KV caches to enable cross-datacenter prefill-decode disaggregation over commodity Ethernet. PrfaaS adds selective offloading, bandwidth-aware scheduling, and cache-aware placement on top of model-side KV efficiency. On an internal 1T-parameter hybrid model: +54% throughput vs homogeneous PD, +32% vs naive heterogeneous. Key implication: as hybrid models become dominant, the intra-DC coupling assumption of PD disaggregation breaks down. See [Disaggregated Serving](techniques/disaggregated-serving.md). (source: raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md)
+
 ## Open Questions
 
 - How does MRV2 performance compare to MRV1 across the model zoo? (MRV1 still handles "long tail" cases)
 - What's the practical impact of torch.compile on cold-start times?
 - How does vLLM's CPU KV cache offloading compare to SGLang's approach?
+- When do hybrid-attention models with small KV cache become the mainstream serving target, shifting PD disaggregation economics?

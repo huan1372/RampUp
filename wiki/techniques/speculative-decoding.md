@@ -2,9 +2,9 @@
 title: "Speculative Decoding"
 tags: [latency, throughput, decoding, speculation]
 created: 2026-04-14
-updated: 2026-04-19
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md]
-related: [concepts/model-runner-v2.md, concepts/continuous-batching.md]
+updated: 2026-04-20
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md]
+related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
 # Speculative Decoding
@@ -74,6 +74,43 @@ CSD is a training-free framework that addresses **false rejections** — cases w
 
 (source: raw/2026-04-19-calibrated-speculative-decoding-arxiv.md)
 
+## SpecGuard: Step-Level Verification for Reasoning (arXiv 2604.15244, April 2026)
+
+Standard spec decode is token-centric: a rejected token triggers rollback, but an accepted erroneous reasoning step propagates forward corrupting the chain. SpecGuard adds step-level verification using model-internal signals only.
+
+**Mechanism**:
+1. Draft model samples multiple candidate steps (not just one)
+2. Self-consistency scoring selects the most consistent candidate
+3. An ensemble of lightweight verifiers (distilled from target model hidden states) validates semantic soundness
+4. Accept or recompute the step from target; only the step is recomputed, not the full sequence
+
+**Results** (multiple reasoning benchmarks, vs standard SD and reward-guided SD):
+
+| Metric | vs Standard SD | vs Reward-guided SD |
+|--------|---------------|---------------------|
+| Accuracy | +3.6% | better |
+| Latency | −11% | better |
+
+No external reward model — overhead is proportional to draft model, not target.
+
+**vLLM integration**: Not yet implemented. Requires step-boundary detection + multi-candidate draft sampling in vLLM's spec decode framework.
+
+**Comparison with other approaches**: SpecGuard targets reasoning correctness; [CSD](speculative-decoding.md#calibrated-speculative-decoding-csd--research-arxiv-260413634-april-2026) targets false-rejection throughput; [P-EAGLE](speculative-decoding.md#p-eagle-parallel-speculative-decoding) targets draft-generation speed. Complementary, not competing.
+
+(source: raw/2026-04-20-specguard-arxiv-2604-15244.md)
+
+## SpecuStream: Runtime-Adaptive Speculation Depth (StreamServe, arXiv 2604.09562)
+
+A component of the [StreamServe](disaggregated-serving.md#streamserve-adaptive-speculative-flows-arxiv-260409562-april-2026) disaggregated serving system. SpecuStream adjusts speculation depth K online from live acceptance rate signals.
+
+**Problem**: Static K is suboptimal for reasoning tasks — during early problem setup, acceptance rates are high (predictable boilerplate); during mid-problem derivation steps, entropy spikes and acceptance drops, wasting draft computation at the original K.
+
+**Mechanism**: Per-stream running average of accepted tokens per verification step. K increases when rate exceeds threshold; K decreases when rate falls below floor. Adjustments happen per request batch without stopping inference.
+
+**Effect**: Combined with disaggregated serving (PipeServe-Engine), StreamServe achieves 9.5% throughput improvement on GSM8K (264 tok/s vs 241 tok/s TP vLLM) and 11–18× latency reduction. See [Disaggregated Serving](disaggregated-serving.md) for full benchmark table.
+
+(source: raw/2026-04-20-streamserve-arxiv-2604-09562.md)
+
 ## Open Questions
 - What's the best draft model selection strategy for a given target model?
 - How does EAGLE-3 compare to vanilla speculative decoding in practice?
@@ -82,3 +119,5 @@ CSD is a training-free framework that addresses **false rejections** — cases w
 - When will P-EAGLE drafter models be available for more target models beyond GPT-OSS and Qwen3-Coder?
 - Does CSD's 2.33× peak speedup hold at high concurrency, or does it share P-EAGLE's diminishing returns pattern?
 - What is the memory overhead of OCM's correction history at serving scale (thousands of concurrent requests)?
+- SpecGuard uses "lightweight verifiers distilled from target hidden states" — what is the distillation cost and when must it be redone for a new target model?
+- Does SpecuStream's adaptive K work well with P-EAGLE's single-pass drafting (where K is a training-time parameter, not runtime-tunable)?
