@@ -2,9 +2,9 @@
 title: "KV Cache Quantization"
 tags: [quantization, kv-cache, memory, compression, turboquant]
 created: 2026-04-16
-updated: 2026-04-19
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md]
-related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md]
+updated: 2026-04-21
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md]
+related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md]
 ---
 
 # KV Cache Quantization
@@ -102,6 +102,16 @@ The TPOT improvement at 8K context arises because higher compression fits more s
 - **TurboQuant 3/4-bit**: experimental — require thorough quality benchmarking; currently not recommended for production without validation
 - **All sub-FP8 methods**: avoid with hybrid models (e.g., Qwen3.5 series) until compatibility is confirmed
 
+## Numerical Precision Note: FP16 Baseline Divergence
+
+KV quantization adds numerical error on top of a **pre-existing FP16 baseline divergence**. As of arXiv 2604.15409 (April 2026), FP16 KV-cached inference already diverges 100% token-by-token from cache-free recomputation even without quantization, due to FP16 non-associativity. This means:
+
+- Quality evaluations of FP8/TurboQuant that compare against a "BF16 baseline" are measuring divergence from BF16 — which is already diverging from theoretical exact computation
+- The "FP8 KV is near-zero quality impact" claim is empirically valid but means: FP8's additional divergence over BF16 is small, not that either is zero-divergence from ground truth
+- Research papers measuring quality degradation from KV quantization should ideally control for this baseline FP16 divergence
+
+(source: raw/2026-04-21-fp16-kv-divergence-arxiv.md)
+
 ## Open Questions
 
 - Does TurboQuant work correctly with PagedAttention's block-based allocation? The PR targets V1 backend; V2/MRV2 compatibility is unconfirmed.
@@ -109,6 +119,7 @@ The TPOT improvement at 8K context arises because higher compression fits more s
 - Can the WHT rotation be fused into the attention kernel to eliminate overhead at short contexts?
 - Is there a calibration-free method to select the optimal K/V bit allocation per model architecture?
 - When will TurboQuant ship in a numbered vLLM release?
+- How does the FP16 baseline divergence (arXiv 2604.15409) affect quality measurements for TurboQuant and future KV quantization methods?
 
 ## Sources
 - [raw/2026-04-16-turboquant-kv-compression-pr38479.md](../../raw/2026-04-16-turboquant-kv-compression-pr38479.md) — primary source for TurboQuant details, PR #38479

@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-20
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md]
+updated: 2026-04-21
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
 ---
 
@@ -15,12 +15,13 @@ LLM inference optimization has converged on a core set of techniques that work t
 
 ## vLLM: Current State
 
-vLLM (v0.19.0 as of April 2026) has become the most widely adopted open-source inference engine. Key recent developments:
+vLLM (v0.19.1 as of April 18, 2026) has become the most widely adopted open-source inference engine. Key recent developments:
 
 - **Model Runner V2 (MRV2)** — a ground-up rewrite of the execution core; opt-in in v0.18.0 (March 2026), **default in v0.19.0** (April 3, 2026). Cleaner, more modular, GPU-native input preparation, async-first. Delivers 56% throughput gain on GB200 from input prep alone.
 - **V1 Engine** — the default since v0.8.0, delivering 1.7x throughput over the original engine. Prefix caching is now nearly free (<1% overhead at 0% hit rate).
 - **Blackwell support** — full SM120 support as of v0.15.1 (Feb 2026), including NVFP4 MoE kernels.
 - **Compilation** — moving toward `torch.compile` as the default optimization path, with custom Helion kernels planned.
+- **v0.19.1** (April 18, 2026) — patch release upgrading to Transformers v5.5.3, unblocking Gemma4 from PyPI; adds Gemma4 Eagle3 speculative decoding (PR #39450) and quantized MoE for Gemma4 (PR #39045). (source: raw/2026-04-21-vllm-v0191-release.md)
 
 ## Competitive Positioning
 
@@ -31,8 +32,8 @@ Based on Clarifai benchmarks (GPT-OSS-120B on 2x H100):
 
 ## Key Optimization Vectors
 
-1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026; WHT overhead reduced Apr 2026)
-2. **Compute** — speculative decoding (P-EAGLE 1.55-1.69×; CSD 2.33× peak, Apr 2026), continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
+1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026; WHT overhead reduced Apr 2026), cross-layer KV compression (YOCO++: 50% KV reduction via architecture, Apr 2026 research)
+2. **Compute** — speculative decoding (P-EAGLE 1.55–1.69×; CSD 2.33× peak, Apr 2026; Eagle3 + Gemma4 v0.19.1), continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
 3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving
 4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap; multimodal scheduler overhead reduction (Apr 2026)
 
@@ -72,9 +73,19 @@ arXiv 2604.09562 combines disaggregated P/D (PipeServe-Engine) with runtime-adap
 
 arXiv 2604.15039 (Moonshot AI / Kimi) argues that hybrid-attention architectures produce small enough KV caches to enable cross-datacenter prefill-decode disaggregation over commodity Ethernet. PrfaaS adds selective offloading, bandwidth-aware scheduling, and cache-aware placement on top of model-side KV efficiency. On an internal 1T-parameter hybrid model: +54% throughput vs homogeneous PD, +32% vs naive heterogeneous. Key implication: as hybrid models become dominant, the intra-DC coupling assumption of PD disaggregation breaks down. See [Disaggregated Serving](techniques/disaggregated-serving.md). (source: raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md)
 
+### FP16 KV Cache: Numerical Non-Equivalence (April 2026)
+
+arXiv 2604.15409 (Chodavarapu, Xu) establishes that FP16 KV-cached inference deterministically diverges from cache-free recomputation due to FP16 non-associativity. 100% token divergence rate across LLaMA-2-7B, Mistral-7B-v0.3, Gemma-2-2B on GSM8K — but cache-ON yields higher accuracy in 8 of 9 conditions. FP32 eliminates divergence entirely. This result undermines the universally assumed numerical equivalence of KV caching, with implications for correctness testing, reproducibility, and quantization quality evaluations. See [KV Cache Management](concepts/kv-cache-management.md). (source: raw/2026-04-21-fp16-kv-divergence-arxiv.md)
+
+### Cross-Layer KV Compression: YOCO++ (April 2026)
+
+arXiv 2604.13556 introduces YOCO++ — a cross-layer KV sharing architecture that achieves 50% KV cache reduction by sharing global KV tensors across top-half Transformer layers with learned residual connections. Achieves SOTA quality among cross-layer methods at 50% compression. Not yet supported in vLLM or other production serving systems. See [Cross-Layer KV Compression](techniques/cross-layer-kv-compression.md). (source: raw/2026-04-21-yoco-plus-arxiv.md)
+
 ## Open Questions
 
 - How does MRV2 performance compare to MRV1 across the model zoo? (MRV1 still handles "long tail" cases)
 - What's the practical impact of torch.compile on cold-start times?
 - How does vLLM's CPU KV cache offloading compare to SGLang's approach?
 - When do hybrid-attention models with small KV cache become the mainstream serving target, shifting PD disaggregation economics?
+- When will vLLM support YOCO-family cross-layer KV architectures?
+- How should KV quantization quality benchmarks account for the FP16 baseline divergence (arXiv 2604.15409)?

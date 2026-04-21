@@ -2,8 +2,8 @@
 title: "Speculative Decoding"
 tags: [latency, throughput, decoding, speculation]
 created: 2026-04-14
-updated: 2026-04-20
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md]
+updated: 2026-04-21
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -49,6 +49,16 @@ Standard EAGLE generates K draft tokens sequentially (K forward passes of the dr
 **Optimal speculation depth**: P-EAGLE peaks at K=7; EAGLE-3 maxes at K=3. Larger K is economical because drafting costs a flat single forward pass regardless of K.
 
 Pre-trained drafter models available for: GPT-OSS 120B, GPT-OSS 20B, Qwen3-Coder 30B.
+
+## Eagle3 + Gemma4 (vLLM v0.19.1)
+
+vLLM v0.19.1 (April 18, 2026) added Eagle3 speculative decoding support for Gemma4 models via PR #39450. This is the first Eagle-family drafter for a Google-origin MoE+multimodal architecture. Key context:
+- Gemma4 is a hybrid dense+MoE model with multimodal and reasoning capabilities
+- The Eagle3 drafter runs alongside the Gemma4 target model, requiring the additional drafter to fit in GPU memory
+- Requires `transformers>=5.5.3` (resolved by the v0.19.1 dependency upgrade)
+- Quantized MoE inference for Gemma4 (PR #39045) is available in the same release, allowing the Gemma4 target model to run in FP8/quantized mode while Eagle3 provides speculative drafts
+
+(source: raw/2026-04-21-vllm-v0191-release.md)
 
 ## Trade-offs
 - Requires maintaining a second (draft) model in memory
