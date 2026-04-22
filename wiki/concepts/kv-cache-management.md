@@ -1,9 +1,9 @@
 ---
 title: "KV Cache Management"
-tags: [memory, kv-cache, vllm-core, offloading]
+tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression]
 created: 2026-04-14
-updated: 2026-04-21
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md]
+updated: 2026-04-22
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md]
 related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md]
 ---
 
@@ -73,8 +73,44 @@ An architectural approach to KV compression that eliminates per-layer KV caches 
 
 Full details at [Cross-Layer KV Compression](../techniques/cross-layer-kv-compression.md). (source: raw/2026-04-21-yoco-plus-arxiv.md)
 
+### Multi-Group KV Offload (PR #38453, April 22, 2026)
+
+Extends the CPU-GPU KV cache offloading handler to support multi-group KV cache transfers. Previously, the offload path assumed a single KV cache group; architectures using multiple groups (e.g., MLA with separate compressed and uncompressed KV groups, or heterogeneous attention designs) could not use the offloader. This PR refactors `transfer_async` to handle group-specific sizes and block indices, with bounds checking. No performance benchmark numbers — correctness fix only.
+
+(source: raw/2026-04-22-vllm-prs-apr21-22.md)
+
+### CUDAGraph Memory Profiling Default (PR #38284, April 21, 2026)
+
+Enables CUDAGraph memory profiling by default for all vLLM serving instances. Previously opt-in via environment variable; now on by default.
+
+**Rationale:** Large MoE models in distributed configs (specifically DeepSeek-R1 at DP=8, EP configurations) trigger OOM during startup without profiling because CUDA graph memory consumption is underestimated. Memory profiling provides accurate accounting during graph capture, preventing these startup OOMs.
+
+**Side effect:** Default `--gpu-memory-utilization` raised from **0.9 to 0.92** to accommodate the profiling overhead. Users on memory-constrained GPUs should be aware. Logging added to warn of OOM risk if the feature is explicitly disabled.
+
+(source: raw/2026-04-22-vllm-prs-apr21-22.md)
+
+### Sequential KV Cache Compression (arXiv 2604.15356, April 2026)
+
+A framework that argues per-vector KV quantization (FP8, TurboQuant) is bounded by per-vector Shannon entropy, and proposes breaking this limit by treating the KV cache as a sequence. Uses Probabilistic Language Tries to deduplicate semantically equivalent prefixes across sessions (generalizing vLLM's prefix caching), then applies predictive delta coding: each KV vector is stored as its residual from the model's own prediction. Compression ratio improves with context length.
+
+No vLLM integration; theoretical/algorithmic paper. Full details at [KV Cache Quantization](../techniques/kv-cache-quantization.md).
+
+(source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
+
+### Depth–Cache Tradeoffs for Reasoning (arXiv 2604.17935, April 20, 2026)
+
+Formal analysis of how aggressively the KV cache can be compressed before multi-step reasoning degrades. Uses k-hop pointer chasing on n tokens as the reasoning proxy task, under a shared KV cache of size s and a locality-respecting cache controller. Key results:
+
+- **Upper bound (constructive):** `L = O(min(k, ⌈k/s⌉ log s) · log n/(mp))` — achievable via windowed pointer doubling
+- **Lower bound (conjectured):** `L = Ω(⌈k/s⌉ · ⌈log₂ n/(Hmp)⌉)` — remaining gap is a probabilistic step on cache trace joint distribution
+- **Max-bound (unconditional):** `L = Ω(max(⌈k/s⌉, log n/(Hmp)))`
+
+Practical implication: for k-step reasoning tasks, compressing KV cache to s < √n/4 requires model depth to scale as Ω(k/s). Aggressive KV compression below this threshold may force the model to implicitly re-encode intermediate reasoning state in residual activations, requiring deeper models.
+
+(source: searched arXiv 2604.17935; full raw source not yet ingested due to limited fetchable content)
+
 ## Key Parameters
-- `gpu_memory_utilization` — fraction of GPU memory for KV cache (default: 0.9; be cautious on shared/cloud GPUs where actual available VRAM may differ from spec)
+- `gpu_memory_utilization` — fraction of GPU memory for KV cache (**default: 0.92** as of PR #38284, April 21, 2026; previously 0.9; be cautious on memory-constrained GPUs)
 - `swap_space` — CPU memory for swapped-out KV blocks (in GB)
 - `kv_cache_dtype` — can use FP8 to halve KV cache memory
 
@@ -93,3 +129,6 @@ Full details at [Cross-Layer KV Compression](../techniques/cross-layer-kv-compre
 - What does the "KV cache manager rethink" in Q2 2026 actually change about the PagedAttention block abstraction?
 - Does KV block offloading to CPU compound the FP16 divergence (arXiv 2604.15409) via additional memory copy operations?
 - When will vLLM support YOCO-family architectures (cross-layer KV sharing)? Does this require the Q2 2026 KV cache manager rethink?
+- Does the depth–cache tradeoff (arXiv 2604.17935) hold empirically for current reasoning models (DeepSeek-R1, o3)? At what compression ratio does reasoning actually degrade?
+- Can vLLM's prefix caching be extended to approximate/semantic prefix matching (as in arXiv 2604.15356 Layer 1)?
+- What is the performance impact of CUDAGraph memory profiling default (PR #38284) on startup time vs. runtime efficiency?

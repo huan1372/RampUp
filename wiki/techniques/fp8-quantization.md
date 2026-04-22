@@ -1,9 +1,9 @@
 ---
 title: "FP8 Quantization"
-tags: [quantization, memory, throughput, hardware]
+tags: [quantization, memory, throughput, hardware, mla, deepseek]
 created: 2026-04-14
-updated: 2026-04-19
-sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md]
+updated: 2026-04-22
+sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md]
 related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md, techniques/fp4-quantization.md]
 ---
 
@@ -49,6 +49,22 @@ Also applies to KV cache: setting `kv_cache_dtype=fp8` halves KV cache memory, e
 
 FP8 is the lowest-overhead point on the KV cache compression spectrum. Sub-FP8 approaches (TurboQuant at 2–4 bits, merged into vLLM main April 15, 2026) achieve 2.6–4.9× compression but carry higher compute overhead and quality risk. See [KV Cache Quantization](kv-cache-quantization.md) for the full spectrum.
 
+## MLA + Group FP8 Fusion (PR #38877, merged April 22, 2026)
+
+A kernel-level optimization for DeepSeek V3 and other MLA-based architectures. Fuses per-group dynamic FP8 quantization directly into the MLA attention kernel, eliminating a separate quantization pass.
+
+**Background:** MLA (Multi-head Latent Attention) is DeepSeek's attention design that compresses KV heads through a low-rank projection. Group FP8 applies FP8 quantization per group of heads rather than per tensor, providing finer-grained scale factors. Previously, quantization ran as a separate kernel before attention.
+
+**Performance (B200x4):**
+- Output token throughput: 5,345 → 5,367 tokens/second (+0.4%)
+- GSM8K accuracy: ~94.8% maintained with fusion
+
+**Also fixes:** NVFP4 pattern matching for `DeepSeek-R1-0528-NVFP4-v2` model variants.
+
+Completes phase 1 of vLLM issue #35792 (full FP8 group quant fusion roadmap for MLA).
+
+(source: raw/2026-04-22-vllm-prs-apr21-22.md)
+
 ## Relationship to FP4
 
 FP4 (MXFP4) is the next step below FP8 for model weights, achieving ~4× memory reduction vs BF16. On Blackwell (SM100/SM120), hardware FP4 TensorCores make MXFP4 viable. As of April 2026, vLLM has a new CUTLASS W4A4 MXFP4 MoE kernel (PR #37463) for B200/SM100. See [FP4 Quantization](fp4-quantization.md).
@@ -56,3 +72,4 @@ FP4 (MXFP4) is the next step below FP8 for model weights, achieving ~4× memory 
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?
 - What's the accuracy degradation for FP4 on reasoning-heavy tasks?
+- What does phase 2 of issue #35792 (beyond group FP8) entail for MLA + quantization fusion?
