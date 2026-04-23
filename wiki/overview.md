@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-22
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md]
+updated: 2026-04-23
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
 ---
 
@@ -106,14 +106,25 @@ A theoretical framework showing that all per-vector KV compression methods (FP8,
 
 (source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
 
+### vLLM Mainline PRs: April 22–23, 2026
+
+No new numbered release. Three performance-relevant PRs merged to main:
+
+- **PR #40092 — TurboQuant FA3/FA4 Prefill Support** (April 23): Fixes TurboQuant's prefill paths to select FA3 on Hopper (H100/H200/H20, SM90) and FA4 on Blackwell (SM100) instead of defaulting to FA2. On H20: +71–89% throughput, −43–54% TTFT on prefill-heavy workloads. Also fixes mixed-backend failures for models with heterogeneous layer types.
+- **PR #35737 — NVFP4 MoE Emulation Fallback** (April 22): Adds Triton-based software emulation for NVFP4-quantized MoE checkpoints on H100 (SM90) and AMD MI300/MI350. Previously Blackwell-only. Accuracy cost: ~3.3% word perplexity increase (10.90→11.26 on Qwen3-30B-A3B-NVFP4). Compute throughput lower than Blackwell native.
+- **PR #40151 — FX Graph Deserialization Elimination** (April 23): Eliminates warm compile overhead by inlining attention submodules as Python code instead of deserializing serialized FX graphs. Warm compile times reduced 88–96% across major models (DeepSeek-V3.2: 6.05→0.27s; GPT-OSS-120B: 1.57→0.19s).
+
+(source: raw/2026-04-23-vllm-prs-apr22-23.md)
+
 ## Open Questions
 
 - How does MRV2 performance compare to MRV1 across the model zoo? (MRV1 still handles "long tail" cases)
-- What's the practical impact of torch.compile on cold-start times?
+- Cold compile times remain unaddressed — what are they after PR #40151, and do they matter for production restart SLOs?
 - How does vLLM's CPU KV cache offloading compare to SGLang's approach?
 - When do hybrid-attention models with small KV cache become the mainstream serving target, shifting PD disaggregation economics?
 - When will vLLM support YOCO-family cross-layer KV architectures?
 - How should KV quantization quality benchmarks account for the FP16 baseline divergence (arXiv 2604.15409)?
 - Does the depth–cache tradeoff (arXiv 2604.17935) hold empirically? At what KV compression ratio does reasoning degrade for current models?
 - What does phase 2 of MLA + quantization fusion (issue #35792) involve beyond group FP8?
+- What is the throughput overhead of NVFP4 emulation on H100 relative to BF16 baseline? (memory savings vs compute cost tradeoff)
 - Can IsoQuant be fused with the attention kernel, similar to MLA + FP8 fusion (PR #38877)?

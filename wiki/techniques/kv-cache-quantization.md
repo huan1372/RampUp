@@ -1,9 +1,9 @@
 ---
 title: "KV Cache Quantization"
-tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression]
+tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression, flashattention]
 created: 2026-04-16
-updated: 2026-04-22
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md]
+updated: 2026-04-23
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md]
 related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md]
 ---
 
@@ -59,9 +59,18 @@ A sub-4-bit online KV compression approach using asymmetric treatment of keys an
 - No offline preparation required
 - Hardware-accelerated on H100, H200, B200; software fallback on older GPUs
 
-### TurboQuant (as of April 19, 2026)
+### TurboQuant (as of April 23, 2026)
 - Merged into vLLM main in PR #38479 (April 15, 2026)
-- Refined in PR #40194 (April 17-19, 2026): removed redundant random sign flip from the WHT pipeline; this reduces per-token KV quantization overhead without affecting compression quality or preset behavior
+- Refined in PR #40194 (April 17-19, 2026): removed redundant random sign flip from the WHT pipeline; reduces per-token KV quantization overhead without affecting quality
+- **FA3/FA4 prefill support (PR #40092, April 23, 2026):** TurboQuant's prefill paths previously defaulted to FA2 on all hardware. PR #40092 adds FA version detection: FA3 is selected on SM90 (Hopper: H100, H200, H20), FA4 on SM100 (Blackwell). Also fixes mixed-backend failures when a model routes some layers to TurboQuant and others to standard FlashAttention. Unlocks the following throughput improvements on NVIDIA H20 (SM90):
+
+  | Workload | Throughput improvement | TTFT reduction |
+  |----------|------------------------|----------------|
+  | prefill_heavy | +71–89% | −43–54% |
+  | long_balanced | +46–58% | −62–63% |
+
+  (source: raw/2026-04-23-vllm-prs-apr22-23.md)
+
 - Targets vLLM V1 attention backend only
 - Flag: `--kv-cache-dtype <preset>` where preset is one of: `turboquant_k8v4`, `turboquant_4bit_nc`, `turboquant_3bit_nc`, `tq_k4v3`
 - No offline calibration required — online compression at inference time
@@ -175,6 +184,7 @@ All per-vector methods (FP8, TurboQuant, IsoQuant) are bounded by the Shannon en
 - How does the FP16 baseline divergence (arXiv 2604.15409) affect quality measurements for TurboQuant and future KV quantization methods?
 - Can IsoQuant's quaternion rotation be fused with the attention kernel (like MLA+FP8 fusion in PR #38877)?
 - What are the actual benchmark numbers for sequential compression (arXiv 2604.15356) vs FP8 and TurboQuant?
+- Does the FA3/FA4 prefill fix (PR #40092) apply to all TurboQuant presets or only to `turboquant_k8v4`? What are the per-preset throughput numbers?
 
 ## Sources
 - [raw/2026-04-16-turboquant-kv-compression-pr38479.md](../../raw/2026-04-16-turboquant-kv-compression-pr38479.md) — primary source for TurboQuant details, PR #38479
@@ -182,3 +192,4 @@ All per-vector methods (FP8, TurboQuant, IsoQuant) are bounded by the Shannon en
 - [raw/vllm-releases.md](../../raw/vllm-releases.md) — FP8 KV cache history
 - [raw/2026-04-22-isoquant-arxiv.md](../../raw/2026-04-22-isoquant-arxiv.md) — IsoQuant and RotorQuant rotation family
 - [raw/2026-04-22-sequential-kv-trie-arxiv.md](../../raw/2026-04-22-sequential-kv-trie-arxiv.md) — sequential compression beyond per-vector Shannon limit
+- [raw/2026-04-23-vllm-prs-apr22-23.md](../../raw/2026-04-23-vllm-prs-apr22-23.md) — PR #40092 TurboQuant FA3/FA4 prefill support

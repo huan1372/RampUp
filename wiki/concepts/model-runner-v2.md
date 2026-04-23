@@ -1,9 +1,9 @@
 ---
 title: "Model Runner V2 (MRV2)"
-tags: [vllm-core, architecture, execution]
+tags: [vllm-core, architecture, execution, compile-time, torch-compile]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md]
+updated: 2026-04-23
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md]
 related: [concepts/paged-attention.md, techniques/speculative-decoding.md, techniques/tensor-parallelism.md]
 ---
 
@@ -42,6 +42,26 @@ V1 tightly coupled persistent state to per-step model inputs, requiring costly r
 - **Spec decode**: **6.3% lower TPOT** on 4×GB200 with GLM-4.7-FP8 + MTP=1, from eliminating CPU-GPU sync points
 - **Overall**: 1.7× throughput over V0 engine when combined with async scheduling (source: raw/2026-04-15-vllm-v019-release.md)
 
+## Compilation: FX Graph Deserialization Elimination (PR #40151, April 23, 2026)
+
+vLLM uses `torch.compile` with FX graph capture for optimized model execution. PR #40151 (builds on PR #38657) eliminates FX graph deserialization overhead during warm compilation by using the Python execution code directly as the runtime source of truth. Attention submodules are inlined as Python functions rather than stored and deserialized from serialized graph representations.
+
+**Warm compile time improvements:**
+
+| Model | Before (s) | After (s) | Reduction |
+|-------|-----------|----------|-----------|
+| DeepSeek-V3.2 | 6.05 | 0.27 | −95.5% |
+| GLM-4.7-FP8 | 7.07 | 0.46 | −93.5% |
+| GPT-OSS-120B | 1.57 | 0.19 | −87.9% |
+| Llama-3.3-70B | 3.95 | 0.20 | −94.9% |
+| Qwen3.5-35B | 2.91 | 1.36 | −53.3% |
+
+Result: sub-2-second warm compile times for most production models. Directly improves restart latency in production serving environments.
+
+**Distinction warm vs cold compile:** Warm compile = reusing a previously-compiled model graph after process restart. Cold compile = first-time graph capture (still takes longer). This PR only addresses the warm path.
+
+(source: raw/2026-04-23-vllm-prs-apr22-23.md)
+
 ## Current Status
 MRV2 is the **default** execution path as of v0.19.0. V1 remains for unsupported cases. Known V2 gaps (as of v0.18.0): linear attention models (Qwen3.5, Nemotron 3 Super), non-Eagle/MTP spec decode methods, EPLB, DBO, logits processors, LoRA — being closed in Q2 2026.
 
@@ -54,5 +74,6 @@ Enable on v0.18.x: `export VLLM_USE_V2_MODEL_RUNNER=1`. No API changes.
 
 ## Open Questions
 - Which models still require MRV1 as of v0.19? When will they migrate?
-- What's the cold-start overhead of CUDA graph capture in MRV2 vs MRV1?
+- Cold compile times remain unaddressed by PR #40151 — what is the cold compile time for DeepSeek-V3.2 and does it remain a production concern?
 - When does EPLB support land in MRV2?
+- Does PR #40151's FX graph inlining affect model correctness for any edge cases (non-standard attention variants, LoRA, etc.)?
