@@ -2,9 +2,9 @@
 title: "KV Cache Quantization"
 tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression, flashattention]
 created: 2026-04-16
-updated: 2026-04-23
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md]
-related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md]
+updated: 2026-04-24
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md]
+related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md, concepts/deepseek-v4-attention.md]
 ---
 
 # KV Cache Quantization
@@ -23,9 +23,12 @@ KV cache memory scales linearly with sequence length × batch size × number of 
 |--------|---------|---------------------|--------------|---------------------|-----------|
 | BF16 (baseline) | 16 | 1× | None | None | (default) |
 | FP8 KV | 8 | 2× | Minimal | Minimal (hardware-native) | `--kv-cache-dtype fp8` |
+| Per-token-head INT8 | 8 | 2× | Minimal | Minimal | `--kv-cache-dtype int8` (per-head) |
+| Per-token-head FP8 | 8 | 2× | Minimal | Minimal | `--kv-cache-dtype fp8` (per-head) |
 | TurboQuant k8v4 | 8K / 4V | 2.6× | Low | ~0–21% | `--kv-cache-dtype turboquant_k8v4` |
 | TurboQuant 4-bit | 4 | 3.8× | Moderate | Not yet benchmarked at scale | `--kv-cache-dtype turboquant_4bit_nc` |
 | TurboQuant 3-bit | 3 | 4.9× | High (0% GSM8K reported) | Not yet benchmarked at scale | `--kv-cache-dtype turboquant_3bit_nc` |
+| TurboQuant 2-bit | 2 | 4× capacity (capacity, not ratio vs BF16) | Unknown | Unknown | TBD |
 
 ## How It Works
 
@@ -75,7 +78,19 @@ A sub-4-bit online KV compression approach using asymmetric treatment of keys an
 - Flag: `--kv-cache-dtype <preset>` where preset is one of: `turboquant_k8v4`, `turboquant_4bit_nc`, `turboquant_3bit_nc`, `tq_k4v3`
 - No offline calibration required — online compression at inference time
 - FP8 fallback for CUDA architectures without WHT kernel support
-- **Not yet in a numbered release** — available on vLLM main as of 2026-04-15
+- **Now in vLLM v0.20.0** (released April 23, 2026) — previously only available on main
+
+### TurboQuant 2-bit (New in v0.20.0)
+
+v0.20.0 introduces a 2-bit KV cache attention backend delivering **4× KV capacity** increase over BF16 baseline. This extends TurboQuant's presets below the previous 3-bit floor. Note: the "4× capacity" phrasing from release notes means 4× more sequences fit in KV cache; this corresponds to an 8-bit-equivalent capacity gain, not a 4× bit reduction from BF16 (which would imply 4-bit). Exact bit depth and algorithmic details not yet fully documented.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### Per-Token-Head INT8/FP8 KV Quantization (New in v0.20.0)
+
+Previous FP8 KV quantization used per-tensor or per-layer scale factors. v0.20.0 adds **per-token-head** granularity: a separate scale factor per token per attention head. This is a strictly finer quantization grid — it reduces the worst-case scale mismatch for models where different heads have very different activation magnitudes (common in models with GQA or MLA). Expected quality improvement over per-tensor FP8 with similar memory footprint.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
 
 ## Benchmarks
 
@@ -174,6 +189,12 @@ All per-vector methods (FP8, TurboQuant, IsoQuant) are bounded by the Shannon en
 
 (source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
 
+## Architectural KV Compression: DeepSeek V4 CSA+HCA
+
+Note: DeepSeek V4's Compressed Sparse Attention (CSA) and Heavily Compressed Attention (HCA) achieve KV reduction at the model architecture level (10% of V3.2's KV at 1M context), not via post-hoc quantization. This is complementary to quantization — one could apply FP8 or TurboQuant on top of the already-compressed V4 KV entries for further reduction. See [DeepSeek V4 Attention](../concepts/deepseek-v4-attention.md).
+
+(source: raw/2026-04-24-deepseek-v4-vllm.md)
+
 ## Open Questions
 
 - Does TurboQuant work correctly with PagedAttention's block-based allocation? The PR targets V1 backend; V2/MRV2 compatibility is unconfirmed.
@@ -185,6 +206,10 @@ All per-vector methods (FP8, TurboQuant, IsoQuant) are bounded by the Shannon en
 - Can IsoQuant's quaternion rotation be fused with the attention kernel (like MLA+FP8 fusion in PR #38877)?
 - What are the actual benchmark numbers for sequential compression (arXiv 2604.15356) vs FP8 and TurboQuant?
 - Does the FA3/FA4 prefill fix (PR #40092) apply to all TurboQuant presets or only to `turboquant_k8v4`? What are the per-preset throughput numbers?
+- What is the exact bit-depth and algorithm for TurboQuant 2-bit (v0.20.0)? Is the "4× capacity" claim at 2-bit per element or something else?
+- What is the quality impact of TurboQuant 2-bit across the model zoo?
+- Can per-token-head FP8 KV be combined with TurboQuant rotation (apply per-head scale after WHT transform)?
+- Can architectural KV compression (DeepSeek V4 CSA/HCA) and post-hoc quantization (TurboQuant) be composed multiplicatively?
 
 ## Sources
 - [raw/2026-04-16-turboquant-kv-compression-pr38479.md](../../raw/2026-04-16-turboquant-kv-compression-pr38479.md) — primary source for TurboQuant details, PR #38479

@@ -1,10 +1,10 @@
 ---
 title: "Disaggregated Serving (Prefill-Decode Separation)"
-tags: [architecture, serving, latency, scale]
+tags: [architecture, serving, latency, scale, kv-connector, eplb, nixl]
 created: 2026-04-14
-updated: 2026-04-20
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md]
-related: [concepts/chunked-prefill.md, concepts/continuous-batching.md, techniques/tensor-parallelism.md, techniques/speculative-decoding.md, concepts/kv-cache-management.md]
+updated: 2026-04-24
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md]
+related: [concepts/chunked-prefill.md, concepts/continuous-batching.md, techniques/tensor-parallelism.md, techniques/speculative-decoding.md, concepts/kv-cache-management.md, concepts/deepseek-v4-attention.md]
 ---
 
 # Disaggregated Serving
@@ -87,9 +87,34 @@ Hybrid-attention architectures (mixing full-attention and linear-attention/SSM l
 
 (source: raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md)
 
+## vLLM v0.20.0 KV Infrastructure Updates (April 23, 2026)
+
+### 3FS KVConnector
+A new KV Connector targeting **Bytedance 3FS** (distributed file system) was added. 3FS is a high-throughput storage system; the connector enables KV cache sharing and persistence across vLLM worker nodes using 3FS as the transport layer. This is the first non-network (file-system-backed) KV connector in vLLM. Useful for checkpoint-style KV reuse across restarts, or for disaggregated deployments where workers share a high-speed storage fabric rather than direct GPU-GPU links.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### EPLB (Expert Parallel Load Balancing) Communication Update
+EPLB (Expert Parallel Load Balancing), which dynamically redistributes MoE expert weights across GPUs during serving, gained an alternative communication strategy for weight exchange in v0.20.0. Additionally, router record tracking for prefill mapping enables smarter load-balancing decisions. **Asyncio infrastructure removed from Async EPLB (PR #40730, April 23-24)**: replaces asyncio scheduling overhead with direct synchronous or CUDA-async calls, reducing EPLB scheduling latency.
+
+(source: raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md)
+
+### Nixl 0.10.1
+The Nixl KV transfer library (used for high-speed cross-node KV migration in disaggregated P/D) was bumped to version 0.10.1. Specific changes not described in available release notes.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### DeepSeek V4 and Disaggregated Serving
+DeepSeek V4-Pro (1.6T params, 1M context) is the first model where vLLM explicitly documented disaggregated serving as a required deployment mode, not an optimization. The KV Connector API handles the hybrid KV cache (CSA compressed blocks + HCA compressed blocks + sliding window), which has different transfer semantics from dense-attention KV. See [DeepSeek V4 Attention](../concepts/deepseek-v4-attention.md).
+
+(source: raw/2026-04-24-deepseek-v4-vllm.md)
+
 ## Open Questions
 - What's the break-even point where disaggregation outperforms co-located serving?
 - How does vLLM-Omni's multi-replica staging compare to purpose-built PD systems?
 - Does StreamServe's SpecuStream adaptive K generalize to P-EAGLE (where K is a training-time hyperparameter, not a runtime variable)?
 - At what hybrid-attention KV size does cross-datacenter P/D (PrfaaS) become competitive with intra-datacenter serving in terms of TTFT?
 - When does vLLM's KV Connector gain a network-aware transport layer for cross-DC scenarios?
+- What is the throughput of the 3FS KVConnector relative to NVLink/InfiniBand-based connectors?
+- Does EPLB's alternative communication strategy resolve the weight exchange bottleneck at high expert parallelism (EP=64+)?
+- What is the KV transfer volume for DeepSeek V4-Pro (1M context) in disaggregated serving, given the hybrid compressed/uncompressed KV layout?

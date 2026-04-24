@@ -1,9 +1,9 @@
 ---
 title: "Model Runner V2 (MRV2)"
-tags: [vllm-core, architecture, execution, compile-time, torch-compile]
+tags: [vllm-core, architecture, execution, compile-time, torch-compile, ray, aot]
 created: 2026-04-14
-updated: 2026-04-23
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md]
+updated: 2026-04-24
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md]
 related: [concepts/paged-attention.md, techniques/speculative-decoding.md, techniques/tensor-parallelism.md]
 ---
 
@@ -62,6 +62,33 @@ Result: sub-2-second warm compile times for most production models. Directly imp
 
 (source: raw/2026-04-23-vllm-prs-apr22-23.md)
 
+## v0.20.0 Advances (April 23, 2026)
+
+### RayExecutorV2
+A new `RayExecutorV2` distributed execution backend was added. This replaces or extends the previous Ray-based executor path with cleaner distributed state management, aligned with MRV2's modular design.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### AOT Compile with Batch-Invariance Mode
+`torch.compile` AOT (Ahead-Of-Time) mode now supports **batch-invariance**: compile artifacts computed for one batch size can be reused across different batch sizes. This eliminates redundant recompilation when the batch size changes during serving (common in continuous batching). The Inductor cache is now nested under the AOT directory, providing a unified compile artifact hierarchy.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### FX Graph Splitting via Codegen
+FX graphs can now be split via codegen, enabling more granular graph partitioning for heterogeneous execution. Complements PR #40151 (FX graph deserialization elimination) from April 23.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### Opaque Objects on torch 2.11
+torch 2.11 (the new default) enables Opaque Objects support in torch.compile, allowing non-tensor Python objects to pass through compile boundaries without triggering graph breaks. This is relevant for vLLM's model state objects.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### Auto-Resolution of CUDAGraph Modes
+Model Runner V2 now auto-resolves CUDAGraph modes from the attention backend — previously required manual configuration. Simplifies deployment and reduces misconfiguration errors.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
 ## Current Status
 MRV2 is the **default** execution path as of v0.19.0. V1 remains for unsupported cases. Known V2 gaps (as of v0.18.0): linear attention models (Qwen3.5, Nemotron 3 Super), non-Eagle/MTP spec decode methods, EPLB, DBO, logits processors, LoRA — being closed in Q2 2026.
 
@@ -73,7 +100,10 @@ Enable on v0.18.x: `export VLLM_USE_V2_MODEL_RUNNER=1`. No API changes.
 - Supports [Tensor Parallelism](../techniques/tensor-parallelism.md) via piecewise CUDA graphs
 
 ## Open Questions
-- Which models still require MRV1 as of v0.19? When will they migrate?
+- Which models still require MRV1 as of v0.20.0? When will they migrate?
 - Cold compile times remain unaddressed by PR #40151 — what is the cold compile time for DeepSeek-V3.2 and does it remain a production concern?
 - When does EPLB support land in MRV2?
 - Does PR #40151's FX graph inlining affect model correctness for any edge cases (non-standard attention variants, LoRA, etc.)?
+- What speedup does AOT batch-invariance mode provide in practice (vs per-batch-size recompilation)?
+- How does RayExecutorV2 differ from the previous Ray executor in terms of state management and failure recovery?
+- Does FX graph splitting via codegen enable MRV2 to run on heterogeneous GPU clusters (different SM versions in the same fleet)?

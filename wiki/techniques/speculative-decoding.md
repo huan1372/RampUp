@@ -2,8 +2,8 @@
 title: "Speculative Decoding"
 tags: [latency, throughput, decoding, speculation]
 created: 2026-04-14
-updated: 2026-04-21
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md]
+updated: 2026-04-24
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -27,6 +27,16 @@ Autoregressive decoding is inherently sequential — each token depends on the p
 - **MRV2 integration** — rejection sampler with greedy/logprobs support (PRs #37238, #37237)
 - **Multi-modal spec decode** — embeddings for vision models (PR #36097)
 - **NGram GPU spec decode** (v0.18.0) — NGram drafting now runs on GPU, compatible with async scheduler
+
+### New in v0.20.0 (April 23, 2026)
+
+**CPU draft-model speculative decoding**: v0.20.0 enables CPU-hosted draft models in vLLM's speculative pipeline for the first time. Previously, all draft models had to reside on GPU. CPU draft models are slower but allow decoupling the draft model from GPU memory, useful when GPU memory is tight. Quality of the speculative pipeline depends on draft-target alignment; CPU draft throughput limits maximum useful K. (source: raw/2026-04-24-vllm-v020-release.md)
+
+**Full CUDA graph for FlexAttention and Eagle prefill**: Full CUDA graph capture is now supported for both FlexAttention and Eagle (EAGLE-3 drafter) prefill paths. Previously, Eagle prefill ran without CUDA graphs, causing kernel launch overhead on every step. With full graph capture, the Eagle prefill is amortized into the graph replay, reducing latency for each speculative step. (source: raw/2026-04-24-vllm-v020-release.md)
+
+**PR #40654 — Eliminate seq_lens_cpu GPU→CPU Sync** (April 23-24, 2026): Removes an unnecessary GPU-to-CPU synchronization in sequence length computation within the speculative decode pipeline. GPU-CPU syncs create pipeline bubbles — the GPU must drain before the CPU reads. Removal reduces TTFT and TPOT overhead in speculative decode paths. (source: raw/2026-04-24-vllm-prs-apr23-24.md)
+
+**PR #40662 — Unified Acceptance Rate Metric V1/V2** (April 23-24, 2026): Acceptance rate was computed differently in V1 and MRV2 backends. Unification enables consistent cross-backend benchmarking. (source: raw/2026-04-24-vllm-prs-apr23-24.md)
 
 ## P-EAGLE: Parallel Speculative Decoding
 P-EAGLE (shipped in vLLM v0.16.0+) transforms EAGLE's autoregressive draft generation into a single parallel forward pass. (source: raw/2026-04-15-p-eagle-blog.md)
@@ -122,6 +132,8 @@ A component of the [StreamServe](disaggregated-serving.md#streamserve-adaptive-s
 (source: raw/2026-04-20-streamserve-arxiv-2604-09562.md)
 
 ## Open Questions
+- What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?
+- Does CUDA graph Eagle prefill improve latency for all Eagle variants (Eagle-1, Eagle-2, Eagle-3, P-EAGLE)?
 - What's the best draft model selection strategy for a given target model?
 - How does EAGLE-3 compare to vanilla speculative decoding in practice?
 - How does spec decode interact with chunked prefill scheduling?

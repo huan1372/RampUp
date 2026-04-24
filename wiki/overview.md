@@ -2,9 +2,9 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-23
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md]
-related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md]
+updated: 2026-04-24
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md]
+related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md]
 ---
 
 # Inference Optimization — Overview & Synthesis
@@ -15,13 +15,14 @@ LLM inference optimization has converged on a core set of techniques that work t
 
 ## vLLM: Current State
 
-vLLM (v0.19.1 as of April 18, 2026) has become the most widely adopted open-source inference engine. Key recent developments:
+vLLM (v0.20.0 as of April 23, 2026) has become the most widely adopted open-source inference engine. Key recent developments:
 
 - **Model Runner V2 (MRV2)** — a ground-up rewrite of the execution core; opt-in in v0.18.0 (March 2026), **default in v0.19.0** (April 3, 2026). Cleaner, more modular, GPU-native input preparation, async-first. Delivers 56% throughput gain on GB200 from input prep alone.
 - **V1 Engine** — the default since v0.8.0, delivering 1.7x throughput over the original engine. Prefix caching is now nearly free (<1% overhead at 0% hit rate).
 - **Blackwell support** — full SM120 support as of v0.15.1 (Feb 2026), including NVFP4 MoE kernels.
 - **Compilation** — moving toward `torch.compile` as the default optimization path, with custom Helion kernels planned.
 - **v0.19.1** (April 18, 2026) — patch release upgrading to Transformers v5.5.3, unblocking Gemma4 from PyPI; adds Gemma4 Eagle3 speculative decoding (PR #39450) and quantized MoE for Gemma4 (PR #39045). (source: raw/2026-04-21-vllm-v0191-release.md)
+- **v0.20.0** (April 23, 2026) — major release: 546 commits from 257 contributors. PyTorch 2.11 + CUDA 13.0 as new defaults; FA4 as default MLA prefill backend (SM90+); TurboQuant 2-bit KV (4× capacity); per-token-head INT8/FP8 KV quantization; online quantization frontend; vLLM IR skeleton; RayExecutorV2; 3FS KVConnector; AOT batch-invariance compile mode; CPU draft-model spec decode; full CUDA graph for Eagle prefill; MXFP4 W4A4 CUTLASS MoE for SM100; MXFP8 Marlin GEMM; NVFP4 dense on MI300/MI355X via emulation. (source: raw/2026-04-24-vllm-v020-release.md)
 
 ## Competitive Positioning
 
@@ -106,6 +107,41 @@ A theoretical framework showing that all per-vector KV compression methods (FP8,
 
 (source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
 
+### vLLM v0.20.0: Major Release (April 23, 2026)
+
+546 commits from 257 contributors. Key inference-optimization highlights:
+
+- **FA4 as default MLA prefill backend** (SM90+, head-dim 512, paged-KV): corrects previous FA2 regression on Hopper/Blackwell MLA paths.
+- **TurboQuant 2-bit KV** (4× capacity): extends TurboQuant family to 2-bit; first time TurboQuant ships in a numbered release (previously main-only since April 15).
+- **Per-token-head INT8/FP8 KV**: finer-grained scale factors vs prior per-tensor quantization.
+- **Online quantization frontend**: end-to-end quantization at load time without pre-quantized checkpoints.
+- **vLLM IR**: initial `rms_norm` skeleton; foundation for future Helion kernel generation.
+- **RayExecutorV2**: cleaner distributed execution backend.
+- **3FS KVConnector**: file-system-backed KV sharing via Bytedance 3FS.
+- **AOT batch-invariance compile mode**: compile artifacts shared across batch sizes.
+- **CPU draft-model spec decode**: first time CPU-hosted draft models work in speculative pipeline.
+- **CUDA graph Eagle prefill**: full graph capture for Eagle prefill paths.
+- **MXFP4 W4A4 CUTLASS MoE (SM100)** and **MXFP8 Marlin GEMM**: Blackwell and Hopper quantization kernel additions.
+- **DeepGEMM in wheel**: no separate install step.
+- **Breaking**: PyTorch 2.11 + CUDA 13.0 required; metrics API changes; pooler config renames.
+
+(source: raw/2026-04-24-vllm-v020-release.md)
+
+### DeepSeek V4: Day-0 vLLM Support (April 24, 2026)
+
+DeepSeek released V4-Pro (1.6T/49B active MoE) and V4-Flash (284B/13B active MoE) with 1M-token context, Apache 2.0 license. vLLM has day-0 support.
+
+The architecture introduces a new hybrid attention paradigm:
+- **CSA (Compressed Sparse Attention)**: compresses every m tokens into 1 KV entry; learned Lightning Indexer retrieves top-k relevant blocks; sliding window of recent uncompressed tokens added for full attention.
+- **HCA (Heavily Compressed Attention)**: larger fixed compression group (m'=128); all compressed entries attended to; used for coarse-context layers.
+- **mHC (Manifold-Constrained Hyper-Connections)**: residual connection constrained to Birkhoff polytope (doubly stochastic matrices), bounding spectral norm ≤ 1 — ensures numerical stability at 1M context depth.
+
+Efficiency at 1M context: V4-Pro uses 27% of V3.2's FLOPs and 10% of V3.2's KV cache. V4-Flash: 10% of FLOPs, 7% of KV. This makes 1M-context serving economically comparable to shorter-context V3.2 serving.
+
+This is the first production-grade open model achieving 1M context without linear attention. It signals that learned sparse attention (CSA/HCA style) is the next architectural layer above MLA/GQA. vLLM's implementation requires hybrid KV cache layout, kernel-fused Lightning Indexer retrieval, and disaggregated serving for V4-Pro scale. See [DeepSeek V4 Attention](concepts/deepseek-v4-attention.md).
+
+(source: raw/2026-04-24-deepseek-v4-vllm.md)
+
 ### vLLM Mainline PRs: April 22–23, 2026
 
 No new numbered release. Three performance-relevant PRs merged to main:
@@ -120,6 +156,9 @@ No new numbered release. Three performance-relevant PRs merged to main:
 
 - How does MRV2 performance compare to MRV1 across the model zoo? (MRV1 still handles "long tail" cases)
 - Cold compile times remain unaddressed — what are they after PR #40151, and do they matter for production restart SLOs?
+- At what request concurrency does DeepSeek V4-Pro's CSA+HCA overhead break even with its 90% KV cache reduction? Where is the throughput crossover vs V3.2?
+- Will vLLM's CSA+HCA implementation generalize to other models that adopt this architecture, or is it V4-specific?
+- What is the quality degradation from NVFP4 emulation on AMD MI300/MI355X (added in v0.20.0) vs. the H100 emulation accuracy loss (3.3% perplexity) already characterized?
 - How does vLLM's CPU KV cache offloading compare to SGLang's approach?
 - When do hybrid-attention models with small KV cache become the mainstream serving target, shifting PD disaggregation economics?
 - When will vLLM support YOCO-family cross-layer KV architectures?
