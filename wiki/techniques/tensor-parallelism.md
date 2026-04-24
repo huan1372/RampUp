@@ -1,9 +1,9 @@
 ---
 title: "Tensor Parallelism"
-tags: [parallelism, multi-gpu, scale]
+tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing]
 created: 2026-04-14
-updated: 2026-04-14
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md]
+updated: 2026-04-24
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md]
 related: [techniques/disaggregated-serving.md, concepts/model-runner-v2.md, techniques/fp8-quantization.md]
 ---
 
@@ -46,6 +46,34 @@ From Red Hat's tuning guide — for a fixed GPU budget:
 - When latency matters more than cost (more GPUs = lower per-request latency)
 - Models > 13B parameters generally benefit from TP2+
 
+## Expert Parallelism (EP) and Load Balancing
+
+For MoE models, expert parallelism (EP) distributes distinct experts across GPUs so each GPU holds and runs a subset of experts. Unlike TP, EP requires token routing via the MoE gating mechanism.
+
+**vLLM support**: EP available since v0.19.0 with EPLB (Expert Parallel Load Balancing) for static routing optimization. PR #40730 (v0.20.0) removed asyncio overhead from EPLB communication.
+
+### ReaLB: Real-Time Load Balancing for Multimodal MoE (arXiv 2604.19503, April 2026)
+
+Under EP for **multimodal** MoE models, vision tokens dominate during prefill, creating severe load imbalance: some EP ranks get vision-heavy expert assignments and become bottlenecks. Standard EPLB re-routes experts (adds communication overhead); ReaLB solves the imbalance by adjusting **computation precision** per rank at runtime.
+
+**Mechanism**: For EP ranks with vision-heavy expert assignments, switch forward passes to FP4 (faster at lower precision on Blackwell SM100 Tensor Cores). Text-heavy ranks remain at BF16/FP8. Wall-clock time equalizes across ranks with zero routing overhead.
+
+**Results (multimodal MoE models)**:
+- **1.29× layer-level speedup**
+- **≤1.2% accuracy loss**
+- Evaluated: Kimi-VL-A3B-Instruct, Qwen3-VL-30B-A3B-Instruct, ERNIE-4.5-VL-27B-A3B
+- **Implemented in vLLM**
+
+| Feature | vLLM EPLB (v0.19.0+) | ReaLB (research) |
+|---------|---------------------|-----------------|
+| Mechanism | Expert re-routing | Per-rank precision |
+| Overhead | Communication overhead | Zero |
+| Target | Any MoE | Multimodal MoE |
+
+(source: raw/2026-04-24-realb-moe-arxiv.md)
+
 ## Open Questions
 - What's the throughput crossover point between TP4×2 replicas vs TP8×1 replica for 70B models?
 - How does Async TP change the scaling characteristics?
+- Does ReaLB's per-rank FP4 assignment require Blackwell SM100 or does it work on H100 (SM90) with MXFP8 fallback?
+- How does ReaLB interact with vLLM's existing EPLB? Can they compose (EPLB for coarse routing, ReaLB for fine-grained precision adjustment)?

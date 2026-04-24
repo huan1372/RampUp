@@ -1,9 +1,9 @@
 ---
 title: "PagedAttention"
-tags: [memory, kv-cache, vllm-core, attention]
+tags: [memory, kv-cache, vllm-core, attention, tpu, pallas, mosaic]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-pagedattention-paper.md, raw/vllm-benchmarks-2026.md, raw/2026-04-14-vllm-rampup-recap.md]
+updated: 2026-04-24
+sources: [raw/vllm-pagedattention-paper.md, raw/vllm-benchmarks-2026.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md]
 related: [concepts/kv-cache-management.md, techniques/prefix-caching.md, concepts/continuous-batching.md]
 ---
 
@@ -45,6 +45,31 @@ The `gpu_memory_utilization` parameter (default 0.9) controls how aggressively y
 bet on statistical sharing. Higher values pack more concurrent requests but raise
 the risk of [preemption](kv-cache-management.md) when the pool runs out.
 
+## Ragged Paged Attention: TPU Implementation (arXiv 2604.15464, April 2026)
+
+PagedAttention was originally designed for NVIDIA GPUs. Applying it to TPUs requires a different kernel implementation because TPUs use systolic array compute units and a different memory hierarchy (no L2 cache; Pallas/Mosaic compilation model vs CUDA PTX).
+
+**Ragged Paged Attention (RPA)** is a TPU-native kernel that implements the paged attention block table abstraction using Pallas (Google JAX kernel API) and Mosaic (TPU compiler backend).
+
+**Three key techniques:**
+1. **Fine-grained tiling**: handles ragged/non-contiguous block table layout without padding waste — standard TPU matmul tiles assume dense tensors, so custom tiling is needed
+2. **Custom software pipeline**: fuses KV cache writes (current token) with attention reads (context tokens) in a single kernel
+3. **Distribution-aware compilation**: separate compiled kernels for decode (memory-bound), prefill (compute-bound), and mixed (chunked prefill with concurrent decode) workloads
+
+**Performance on Llama 3 8B on TPU7x:**
+
+| Metric | Achieved |
+|--------|----------|
+| Memory Bandwidth Utilization (decode) | **86% of hardware peak** |
+| Model FLOPs Utilization (prefill) | **73% of hardware peak** |
+| Token throughput vs pre-integration | **5× improvement** (since vLLM-TPU integration in February 2025) |
+
+RPA is the **primary TPU attention backend in both vLLM and SGLang** (vLLM PR #13379).
+
+The block table abstraction is preserved; only the kernel implementation changes for TPU hardware characteristics.
+
+(source: raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md)
+
 ## Relationship to Other Concepts
 - Enables [Continuous Batching](continuous-batching.md) — without efficient memory, dynamic batching can't work
 - Foundation for [Prefix Caching](../techniques/prefix-caching.md) — shared blocks make prefix reuse natural
@@ -53,3 +78,6 @@ the risk of [preemption](kv-cache-management.md) when the pool runs out.
 ## Open Questions
 - How does block size affect performance across different model architectures?
 - What's the overhead of the block table lookup compared to contiguous memory access?
+- What is the RPA decode MBU for larger models (70B+) where the KV cache is proportionally larger?
+- Does RPA's distribution-aware compilation handle chunked-prefill+decode mixed batches as efficiently as pure-prefill or pure-decode?
+- How does TPU7x RPA performance compare to equivalent GPU-side FlashAttention on H100 for the same model/context length?

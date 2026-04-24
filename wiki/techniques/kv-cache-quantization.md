@@ -1,9 +1,9 @@
 ---
 title: "KV Cache Quantization"
-tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression, flashattention]
+tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression, flashattention, channel-elimination, grace]
 created: 2026-04-16
 updated: 2026-04-24
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md]
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-grace-kv-arxiv.md]
 related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md, concepts/deepseek-v4-attention.md]
 ---
 
@@ -189,6 +189,34 @@ All per-vector methods (FP8, TurboQuant, IsoQuant) are bounded by the Shannon en
 
 (source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
 
+## Graph-Guided Channel Elimination: GRACE (arXiv 2604.16983, April 2026)
+
+A complementary compression dimension: instead of reducing bits-per-element (quantization), GRACE **eliminates entire KV channels/dimensions** based on inter-channel dependency graphs.
+
+### Key Idea
+
+Prior channel pruning methods score each KV channel independently. GRACE argues this misses inter-channel interactions: a channel that looks unimportant in isolation may be important as a compensating signal for another channel. GRACE constructs an inter-channel interaction graph (channels as nodes, dependency edges from attention patterns) and prunes graph-structurally redundant channels rather than independently scored ones.
+
+### Performance
+
+- **60% KV cache size reduction** with negligible performance degradation
+- Consistently outperforms THINK (prior channel pruning baseline) on LongBench
+- Evaluated: LLaMA-3-8B-Instruct, Mistral-7B-Instruct-v0.2 on 6 LongBench task categories
+
+### Relationship to Quantization
+
+GRACE operates orthogonally to quantization — it reduces the number of KV dimensions rather than the bits per dimension. In principle, GRACE (reduce dimensions) + TurboQuant (reduce bits) could be composed multiplicatively:
+
+| Method | Dimension reduction | Bit reduction | Net compression |
+|--------|--------------------|--------------:|----------------|
+| FP8 KV | 1× | 2× | 2× |
+| GRACE 60% elimination | 0.4× | 1× | 2.5× |
+| GRACE + FP8 | 0.4× | 2× | 5× (hypothetical) |
+
+No benchmark for composed methods exists yet. No vLLM integration.
+
+(source: raw/2026-04-24-grace-kv-arxiv.md)
+
 ## Architectural KV Compression: DeepSeek V4 CSA+HCA
 
 Note: DeepSeek V4's Compressed Sparse Attention (CSA) and Heavily Compressed Attention (HCA) achieve KV reduction at the model architecture level (10% of V3.2's KV at 1M context), not via post-hoc quantization. This is complementary to quantization — one could apply FP8 or TurboQuant on top of the already-compressed V4 KV entries for further reduction. See [DeepSeek V4 Attention](../concepts/deepseek-v4-attention.md).
@@ -197,6 +225,8 @@ Note: DeepSeek V4's Compressed Sparse Attention (CSA) and Heavily Compressed Att
 
 ## Open Questions
 
+- Can GRACE's graph-based channel elimination be integrated with TurboQuant rotation (eliminate channels first, then quantize remaining)?
+- Does GRACE's 60% dimension reduction at 7-8B scale hold at 70B+ (where head structure differs significantly)?
 - Does TurboQuant work correctly with PagedAttention's block-based allocation? The PR targets V1 backend; V2/MRV2 compatibility is unconfirmed.
 - What is the quality impact across the model zoo (not just Qwen3-4B)?
 - Can the WHT rotation be fused into the attention kernel to eliminate overhead at short contexts?

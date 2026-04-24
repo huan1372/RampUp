@@ -1,9 +1,9 @@
 ---
 title: "Speculative Decoding"
-tags: [latency, throughput, decoding, speculation]
+tags: [latency, throughput, decoding, speculation, monte-carlo, smc]
 created: 2026-04-14
 updated: 2026-04-24
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md]
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -131,6 +131,33 @@ A component of the [StreamServe](disaggregated-serving.md#streamserve-adaptive-s
 
 (source: raw/2026-04-20-streamserve-arxiv-2604-09562.md)
 
+## Sequential Monte Carlo Speculative Decoding (SMC-SD) — Research (arXiv 2604.15672, April 2026)
+
+SMC-SD replaces speculative decoding's **rejection sampling** with **importance-weighted particle resampling** (Sequential Monte Carlo). The key problem with rejection sampling: when draft and target diverge, the draft block is truncated at the first rejection, wasting all subsequent draft tokens. SMC-SD avoids this by treating each decode step as a population of N draft particles, assigning importance weights from the likelihood ratio (target/draft), and resampling — no rollback, no wasted draft compute.
+
+**Key properties:**
+- **No rollback**: verification is a fixed-size vectorized operation regardless of draft quality
+- **Approximate but bounded**: principled per-step approximation error bounds; output distribution differs slightly from the exact target distribution
+- **Uses idle compute**: LLM inference is memory bandwidth-bound; particle scoring comes nearly free during the memory-bound attention ops
+
+**Performance:**
+
+| Metric | vs Standard Speculative Decoding | vs Autoregressive Decoding |
+|--------|----------------------------------|---------------------------|
+| Speedup | **2.36×** | **5.2×** |
+| Accuracy | Within 3% of target | Within 3% of target |
+
+Benchmarks: reasoning, instruction-following, and coding tasks. Authors: Yahya Emara et al. (Cornell/MIT/ETH Zürich).
+
+**Comparison with other training-free spec decode improvements:**
+- **CSD (arXiv 2604.13634):** addresses false rejections via online correction memory — different mechanism, similar goal
+- **P-EAGLE:** improves draft generation speed; SMC-SD improves the verification/acceptance step — complementary
+- **SpecGuard:** targets reasoning step correctness; orthogonal
+
+No vLLM integration. Implementation requires N-particle draft generation and importance weighting in `vllm/model_executor/layers/spec_decode/`.
+
+(source: raw/2026-04-24-smc-sd-arxiv.md)
+
 ## Open Questions
 - What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?
 - Does CUDA graph Eagle prefill improve latency for all Eagle variants (Eagle-1, Eagle-2, Eagle-3, P-EAGLE)?
@@ -143,3 +170,6 @@ A component of the [StreamServe](disaggregated-serving.md#streamserve-adaptive-s
 - What is the memory overhead of OCM's correction history at serving scale (thousands of concurrent requests)?
 - SpecGuard uses "lightweight verifiers distilled from target hidden states" — what is the distillation cost and when must it be redone for a new target model?
 - Does SpecuStream's adaptive K work well with P-EAGLE's single-pass drafting (where K is a training-time parameter, not runtime-tunable)?
+- Does SMC-SD's approximate distribution (within 3% accuracy) degrade further for reasoning-heavy tasks that require exact token-level fidelity?
+- At what number of particles N does SMC-SD achieve the 2.36× speedup over standard spec decode? Is there a throughput/quality tradeoff with N?
+- Can SMC-SD be combined with P-EAGLE (use P-EAGLE for fast multi-token draft generation, SMC for better acceptance)?

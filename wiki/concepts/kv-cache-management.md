@@ -1,10 +1,10 @@
 ---
 title: "KV Cache Management"
-tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression]
+tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu]
 created: 2026-04-14
-updated: 2026-04-22
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md]
-related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md]
+updated: 2026-04-24
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md]
+related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
 # KV Cache Management
@@ -97,6 +97,41 @@ No vLLM integration; theoretical/algorithmic paper. Full details at [KV Cache Qu
 
 (source: raw/2026-04-22-sequential-kv-trie-arxiv.md)
 
+### Temporal-Tiered KV Cache: TTKV (arXiv 2604.19769, April 2026)
+
+A tiering approach that maps the human memory system onto the KV cache. Recent KV states act as "short-term memory" (stored in fast HBM), while older states form "long-term memory" (stored in slower DRAM). The core observation: attention patterns in long-context tasks show that recent tokens receive the most attention weight; older tokens are accessed sparsely and selectively.
+
+**Three-part design:**
+1. **Tier Layout:** HBM (fast/high-precision) for recent tokens; DRAM (slow/lower-precision) for old tokens
+2. **Tier Content:** Tier assignment based purely on temporal proximity — the most recent W tokens stay in HBM; a sliding window moves older tokens to DRAM
+3. **Tier Interaction:** Block-wise streaming attention overlaps DRAM→HBM communication with HBM attention computation, hiding cross-tier latency
+
+**Results on 128K-context tasks:**
+- **5.94× cross-tier traffic reduction**
+- **76% latency reduction**
+- **2× throughput improvement** over strong baselines
+
+No vLLM integration confirmed. Would require tiered block table and streaming attention kernel.
+
+(source: raw/2026-04-24-ttkv-arxiv.md)
+
+### CPU-GPU Hybrid Attention: HybridGen (arXiv 2604.18529, April 20, 2026)
+
+Extends the offloading idea further: the CPU is not just a storage medium but an **active compute participant**. HybridGen splits attention computation across CPU and GPU simultaneously on systems with CXL-expanded memory.
+
+**Mechanism:** GPU computes attention over HBM-resident KV (recent/important); CPU computes attention over CXL-DRAM-resident KV (older/less-important). Results merged via log-sum-exp aggregation identical to FlashAttention's tile reduction. A feedback-driven scheduler adjusts the split boundary dynamically.
+
+**Semantic-Aware Placement:** KV blocks are assigned to HBM or CXL-DRAM based on estimated importance from prior decode-step attention scores.
+
+**Results:**
+- **1.41×–3.2× throughput improvement** over 6 KV cache management baselines
+- Full context fidelity (no eviction) — unlike pruning/eviction methods
+- Evaluated on 3 models × 11 sizes × 3 GPU platforms with CXL memory
+
+See full details at [CPU-GPU Hybrid Attention](../techniques/cpu-gpu-hybrid-attention.md). No vLLM integration confirmed.
+
+(source: raw/2026-04-24-hybridgen-arxiv.md)
+
 ### Depth–Cache Tradeoffs for Reasoning (arXiv 2604.17935, April 20, 2026)
 
 Formal analysis of how aggressively the KV cache can be compressed before multi-step reasoning degrades. Uses k-hop pointer chasing on n tokens as the reasoning proxy task, under a shared KV cache of size s and a locality-respecting cache controller. Key results:
@@ -120,8 +155,13 @@ Practical implication: for k-step reasoning tasks, compressing KV cache to s < �
 - [KV Cache Quantization](../techniques/kv-cache-quantization.md) covers the full spectrum including TurboQuant (2.6–4.9×)
 - [Prefix Caching](../techniques/prefix-caching.md) is a sharing strategy within this system
 - [Cross-Layer KV Compression](../techniques/cross-layer-kv-compression.md) — architectural approach reducing KV count across layers (YOCO++)
+- [CPU-GPU Hybrid Attention](../techniques/cpu-gpu-hybrid-attention.md) — HybridGen: CPU as active compute participant for KV-resident attention (arXiv 2604.18529)
 
 ## Open Questions
+- How does TTKV's temporal tiering (arXiv 2604.19769) compare to HybridGen's semantic-aware placement? Can they be combined?
+- What is TTKV's sliding window size W (tokens in HBM) and how is it tuned for a given workload?
+- Does HybridGen's CPU attention work for reasoning tasks where far-back context is retroactively important?
+- When will CXL memory be commodity-level in cloud (prerequisite for HybridGen deployment)?
 - How does the new CPU offloading compare to SGLang's approach?
 - What's the right eviction policy for mixed workloads (short vs. long context)?
 - How will disk offloading perform for the KV connector API?

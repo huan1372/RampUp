@@ -3,8 +3,8 @@ title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
 updated: 2026-04-24
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md]
-related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md]
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md]
+related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
 # Inference Optimization — Overview & Synthesis
@@ -152,6 +152,22 @@ No new numbered release. Three performance-relevant PRs merged to main:
 
 (source: raw/2026-04-23-vllm-prs-apr22-23.md)
 
+### Deferred Papers Ingested (April 24, 2026 — Session 2)
+
+Six arXiv papers that were inaccessible in prior sessions (HTTP 403) are now retrievable via search snippets.
+
+**TTKV — Temporal KV Tiering (arXiv 2604.19769, Harbin IT + Guangzhou Univ):** HBM/DRAM tier assignment by temporal proximity; block-wise streaming attention for overlap. On 128K-context tasks: 5.94× traffic reduction, 76% latency reduction, 2× throughput over baselines. Not in vLLM. See [KV Cache Management](concepts/kv-cache-management.md).
+
+**HybridGen — CPU-GPU Hybrid Attention (arXiv 2604.18529, April 20 2026):** CPU computes attention over CXL-DRAM KV while GPU handles HBM KV, results merged via log-sum-exp. 1.41×–3.2× vs 6 baselines on 3 models × 11 sizes × 3 GPU platforms. Full KV fidelity (no eviction). See [CPU-GPU Hybrid Attention](techniques/cpu-gpu-hybrid-attention.md).
+
+**SMC-SD — Sequential Monte Carlo Spec Decode (arXiv 2604.15672, Cornell/MIT/ETH):** Replaces rejection sampling with importance-weighted particle resampling. No rollback; fixed-size verification. 2.36× over standard spec decode, 5.2× over autoregressive, within 3% accuracy. Not in vLLM. See [Speculative Decoding](techniques/speculative-decoding.md).
+
+**GRACE — Graph-Guided Channel Elimination (arXiv 2604.16983, Harbin IT):** Channel pruning with inter-channel dependency graphs; 60% KV dimension reduction, negligible quality loss on LongBench. Orthogonal to quantization (could compose). Not in vLLM. See [KV Cache Quantization](techniques/kv-cache-quantization.md).
+
+**ReaLB — Multimodal MoE EP Load Balancing (arXiv 2604.19503):** Dynamic per-EP-rank precision (FP4 for vision-heavy ranks) eliminates EP load imbalance with zero routing overhead. 1.29× layer speedup, ≤1.2% accuracy loss. Implemented in vLLM. See [Tensor Parallelism](techniques/tensor-parallelism.md).
+
+**Ragged Paged Attention (arXiv 2604.15464, April 16 2026):** TPU-native PagedAttention kernel (Pallas/Mosaic). Fine-grained tiling + fused pipeline + distribution-aware compilation for decode/prefill/mixed modes. 86% MBU decode, 73% MFU prefill on TPU7x/Llama3-8B. 5× throughput improvement since vLLM-TPU integration (Feb 2025). Primary TPU backend in both vLLM and SGLang. See [PagedAttention](concepts/paged-attention.md).
+
 ## Open Questions
 
 - How does MRV2 performance compare to MRV1 across the model zoo? (MRV1 still handles "long tail" cases)
@@ -167,3 +183,8 @@ No new numbered release. Three performance-relevant PRs merged to main:
 - What does phase 2 of MLA + quantization fusion (issue #35792) involve beyond group FP8?
 - What is the throughput overhead of NVFP4 emulation on H100 relative to BF16 baseline? (memory savings vs compute cost tradeoff)
 - Can IsoQuant be fused with the attention kernel, similar to MLA + FP8 fusion (PR #38877)?
+- How do TTKV (temporal tiering) and HybridGen (semantic-aware CPU-GPU split) compare on the same 128K+ context benchmark? Can they compose?
+- Does SMC-SD's approximate distribution cause measurable degradation on reasoning-heavy tasks beyond the 3% accuracy bound?
+- Can GRACE (channel elimination) and TurboQuant (bit reduction) be composed for >5× KV compression at acceptable quality?
+- Does ReaLB's per-rank FP4 work on SM90 (H100) via MXFP8 fallback, or is it Blackwell-only?
+- RPA achieves 86% MBU on TPU7x for Llama3-8B — how does this compare to H100 FlashAttention MBU for the same model?
