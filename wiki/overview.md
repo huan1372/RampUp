@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md]
+updated: 2026-04-25
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -167,6 +167,18 @@ Six arXiv papers that were inaccessible in prior sessions (HTTP 403) are now ret
 **ReaLB — Multimodal MoE EP Load Balancing (arXiv 2604.19503):** Dynamic per-EP-rank precision (FP4 for vision-heavy ranks) eliminates EP load imbalance with zero routing overhead. 1.29× layer speedup, ≤1.2% accuracy loss. Implemented in vLLM. See [Tensor Parallelism](techniques/tensor-parallelism.md).
 
 **Ragged Paged Attention (arXiv 2604.15464, April 16 2026):** TPU-native PagedAttention kernel (Pallas/Mosaic). Fine-grained tiling + fused pipeline + distribution-aware compilation for decode/prefill/mixed modes. 86% MBU decode, 73% MFU prefill on TPU7x/Llama3-8B. 5× throughput improvement since vLLM-TPU integration (Feb 2025). Primary TPU backend in both vLLM and SGLang. See [PagedAttention](concepts/paged-attention.md).
+
+### vLLM Post-v0.20.0 PRs: April 24–25, 2026
+
+No new numbered release. Three technically significant PRs merged:
+
+- **PR #40810 — EPLB replica selection bias fix**: Knuth multiplicative hash replaces the prior hash function, which silently collapsed all tokens to one replica when `top_k` was a multiple of the replica count (>90% imbalance). After: max/mean workload ratio 1.07 on Qwen3.5-A17B/8×B200. This is a **correctness fix masquerading as a performance issue** — EPLB was effectively disabled for common EP configurations. See [Tensor Parallelism](techniques/tensor-parallelism.md).
+
+- **PR #34556 — Humming JIT quantization kernel**: JIT-compiled kernel library from inclusionAI supporting W{1–8}A{16/8/4} × {GPTQ, AWQ, FP8, MXFP4, NVFP4, BITNET}. On H20: ~142 vs ~90 TFLOPS for W8A16 vs Marlin (~1.58× faster). CUDA graph compatible. **Broadest weight-bit range (W1–W8) in any single vLLM backend** — adds path for sub-INT4 inference on Ampere/Hopper without new kernel contributions. See [FP8 Quantization](techniques/fp8-quantization.md).
+
+- **PR #40412 — NIXL EP batched-expert consistency**: Fixes silent miscategorization of NIXL EP in fused MoE configuration, ensuring NIXL EP and DeepEP LL are treated equivalently for activation format, shared-expert handling, and FP4 selection. See [Disaggregated Serving](techniques/disaggregated-serving.md).
+
+(source: raw/2026-04-25-vllm-prs-apr24-25.md)
 
 ## Open Questions
 

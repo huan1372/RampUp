@@ -1,9 +1,9 @@
 ---
 title: "FP8 Quantization"
-tags: [quantization, memory, throughput, hardware, mla, deepseek]
+tags: [quantization, memory, throughput, hardware, mla, deepseek, kernels, jit]
 created: 2026-04-14
-updated: 2026-04-22
-sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md]
+updated: 2026-04-25
+sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-25-vllm-prs-apr24-25.md]
 related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md, techniques/fp4-quantization.md]
 ---
 
@@ -69,7 +69,42 @@ Completes phase 1 of vLLM issue #35792 (full FP8 group quant fusion roadmap for 
 
 FP4 (MXFP4) is the next step below FP8 for model weights, achieving ~4× memory reduction vs BF16. On Blackwell (SM100/SM120), hardware FP4 TensorCores make MXFP4 viable. As of April 2026, vLLM has a new CUTLASS W4A4 MXFP4 MoE kernel (PR #37463) for B200/SM100. See [FP4 Quantization](fp4-quantization.md).
 
+## Humming Quantization Kernel (PR #34556, merged April 24, 2026)
+
+Humming is a **JIT quantization kernel library** from the inclusionAI project, integrated into vLLM as a fourth quantization kernel backend alongside Marlin, CUTLASS, and FlashInfer.
+
+### Format Coverage
+- **Weight-activation combos:** W{1–8} A{16/8/4} — the broadest coverage in any single vLLM backend
+- **Quantization schemes:** GPTQ, AWQ, FP8, MXFP4, NVFP4, BITNET
+- **Exclusions:** GPTQ with `desc_act=True`, HQQ
+
+### Hardware Support
+- **Optimal:** Turing (SM75), Ampere (SM80), Ada Lovelace (SM89), Hopper (SM90/SM90a)
+- **Partial:** Blackwell datacenter (SM100) and consumer GPUs — functional but not peak-performance
+
+### Online Quantization
+Supports serving-time quantization for INT1–INT8 and FP3–FP8 without pre-quantized checkpoints. Bit-depths ≥ 6 recommended for uncalibrated (no calibration dataset) use. Configured via environment variables.
+
+### MoE and CUDA Graph
+Supports block-wise MoE operations and is CUDA-graph compatible.
+
+### Benchmarks
+
+| Configuration | Humming | Marlin | Hardware | Note |
+|--------------|---------|--------|----------|------|
+| W8A16, dense, float16 | ~142 TFLOPS | ~89–90 TFLOPS | H20 | Large matrix dims |
+
+**~1.58× throughput advantage over Marlin** on H20 for W8A16 at large batch sizes.
+
+### Significance
+Humming's JIT compilation model makes it the most format-flexible backend currently in vLLM. Unlike Marlin (W4/W8 GPTQ/AWQ), CUTLASS (FP8/FP4/MoE), and FlashInfer (attention-kernel-adjacent), Humming can serve sub-INT8 precision (W1–W3) and FP3–FP7 without separate kernel contributions. On older GPU generations (Ampere, Turing) that lack native FP4 TensorCores, Humming's JIT path is likely the best route to sub-INT8 inference.
+
+(source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?
 - What's the accuracy degradation for FP4 on reasoning-heavy tasks?
 - What does phase 2 of issue #35792 (beyond group FP8) entail for MLA + quantization fusion?
+- What is Humming's throughput vs Marlin on Hopper (SM90) for W4A16 (typical GPTQ config)?
+- Does Humming's JIT compilation add measurable first-request latency vs pre-compiled Marlin kernels?
+- Does Humming support FP8 KV cache quantization, or only weight/activation quantization?

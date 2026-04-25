@@ -2,8 +2,8 @@
 title: "Disaggregated Serving (Prefill-Decode Separation)"
 tags: [architecture, serving, latency, scale, kv-connector, eplb, nixl]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md]
+updated: 2026-04-25
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-25-vllm-prs-apr24-25.md]
 related: [concepts/chunked-prefill.md, concepts/continuous-batching.md, techniques/tensor-parallelism.md, techniques/speculative-decoding.md, concepts/kv-cache-management.md, concepts/deepseek-v4-attention.md]
 ---
 
@@ -108,6 +108,27 @@ The Nixl KV transfer library (used for high-speed cross-node KV migration in dis
 DeepSeek V4-Pro (1.6T params, 1M context) is the first model where vLLM explicitly documented disaggregated serving as a required deployment mode, not an optimization. The KV Connector API handles the hybrid KV cache (CSA compressed blocks + HCA compressed blocks + sliding window), which has different transfer semantics from dense-attention KV. See [DeepSeek V4 Attention](../concepts/deepseek-v4-attention.md).
 
 (source: raw/2026-04-24-deepseek-v4-vllm.md)
+
+## Post-v0.20.0 NIXL and EPLB Fixes (April 24, 2026)
+
+### NIXL EP as Batched Experts (PR #40412)
+
+NIXL EP (the NIXL-library-based Expert Parallelism backend) follows the batched-expert activation path in the fused MoE kernel, but portions of the fused MoE configuration and FP4 oracle selection only checked for `DeepEP LL` kernels. NIXL EP was silently excluded from:
+- Activation format selection (batched vs. non-batched)
+- Shared-expert handling
+- FP4 backend selection
+
+**Fix:** NIXL EP incorporated into all three batched-format check sites. New property `needs_round_robin_routing_tables` introduced to semantically separate routing-table requirements from output-format concerns, enabling finer-grained per-backend configuration.
+
+**Impact:** Correctness fix. NIXL EP configurations using FP4 quantization or shared experts were silently falling back to non-batched paths, potentially producing incorrect outputs or degraded throughput for FP4 MoE models. NIXL EP and DeepEP LL are now treated equivalently in all configuration logic.
+
+(source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
+### EPLB Replica Selection Bias Fix (PR #40810)
+
+Fixed in tensor-parallelism layer but relevant here: EPLB's fused MoE router had a hash collision bug causing >90% load imbalance when `top_k` was a multiple of the replica count. Fixed via Knuth multiplicative hash. Throughput impact: max/mean workload ratio 1.2 → 1.07 on Qwen3.5-A17B / 8× B200. See [Tensor Parallelism](tensor-parallelism.md).
+
+(source: raw/2026-04-25-vllm-prs-apr24-25.md)
 
 ## Open Questions
 - What's the break-even point where disaggregation outperforms co-located serving?

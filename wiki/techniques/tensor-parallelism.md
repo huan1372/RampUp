@@ -1,9 +1,9 @@
 ---
 title: "Tensor Parallelism"
-tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing]
+tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing, eplb]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md]
+updated: 2026-04-25
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md]
 related: [techniques/disaggregated-serving.md, concepts/model-runner-v2.md, techniques/fp8-quantization.md]
 ---
 
@@ -72,8 +72,27 @@ Under EP for **multimodal** MoE models, vision tokens dominate during prefill, c
 
 (source: raw/2026-04-24-realb-moe-arxiv.md)
 
+## EPLB Replica Selection Bias Fix (PR #40810, April 24, 2026)
+
+**Problem:** The EPLB fused MoE router had a hash-collision bug when `top_k` (active experts per token) was a multiple of the replica count. All tokens for affected expert groups mapped to the same replica via the hash function, causing load imbalance exceeding 90% in adversarial configurations — effectively negating the load-balancing purpose.
+
+**Fix:** Replaced the hash function with a **Knuth multiplicative hash** for replica selection. Knuth's multiplicative method distributes keys uniformly across buckets regardless of the algebraic relationship between key values and bucket count, breaking the periodicity that caused collapse.
+
+**Results (Qwen3.5-A17B on 8× B200):**
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Max/mean workload ratio | 1.2 (with >90% imbalance in extreme cases) | 1.07 |
+
+A regression test `test_eplb_map_hot_expert_replica_balance` was added (496 tests passing).
+
+**Impact:** Correctness and performance fix for any deployment using EP ≥ 2 with `top_k` values that are multiples of the replica count. Common configurations such as `top_k=2` with 2 replicas and `top_k=8` with 4 replicas are affected. Without the fix, EPLB silently degrades to near-worst-case distribution for those configurations.
+
+(source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
 ## Open Questions
 - What's the throughput crossover point between TP4×2 replicas vs TP8×1 replica for 70B models?
 - How does Async TP change the scaling characteristics?
 - Does ReaLB's per-rank FP4 assignment require Blackwell SM100 or does it work on H100 (SM90) with MXFP8 fallback?
 - How does ReaLB interact with vLLM's existing EPLB? Can they compose (EPLB for coarse routing, ReaLB for fine-grained precision adjustment)?
+- Does the Knuth multiplicative hash uniformly fix imbalance for all `top_k` / replica count ratios, or are there remaining edge cases at very large EP counts?
