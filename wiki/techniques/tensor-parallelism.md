@@ -2,8 +2,8 @@
 title: "Tensor Parallelism"
 tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing, eplb]
 created: 2026-04-14
-updated: 2026-04-25
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md]
+updated: 2026-04-26
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md]
 related: [techniques/disaggregated-serving.md, concepts/model-runner-v2.md, techniques/fp8-quantization.md]
 ---
 
@@ -89,6 +89,21 @@ A regression test `test_eplb_map_hot_expert_replica_balance` was added (496 test
 **Impact:** Correctness and performance fix for any deployment using EP ≥ 2 with `top_k` values that are multiples of the replica count. Common configurations such as `top_k=2` with 2 replicas and `top_k=8` with 4 replicas are affected. Without the fix, EPLB silently degrades to near-worst-case distribution for those configurations.
 
 (source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
+## MoE Routing Unpad Correctness Fix (PR #40865, April 25, 2026)
+
+The MoE runner was unconditionally unpadding the routed expert output before shared-expert addition and routed output transforms. This caused failures in MoE architectures **without shared experts**, where the premature truncation produced non-contiguous tensor issues.
+
+**Fix:** Unpadding now conditional on `self.has_shared_expert or self.routed_output_transform is not None`.
+
+**Impact:**
+- Restores GPT-OSS 20B functionality on B200 hardware (GPQA eval was crashing due to non-contiguous tensor error)
+- Preserves prior fix for Nemotron-Nano-v3 (TP=1 shared-expert scenario)
+- Affects all latent MoE models with routed output transforms
+
+No performance impact — correctness fix only.
+
+(source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
 ## Open Questions
 - What's the throughput crossover point between TP4×2 replicas vs TP8×1 replica for 70B models?

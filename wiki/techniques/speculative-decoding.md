@@ -1,9 +1,9 @@
 ---
 title: "Speculative Decoding"
-tags: [latency, throughput, decoding, speculation, monte-carlo, smc]
+tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md]
+updated: 2026-04-26
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -158,6 +158,26 @@ No vLLM integration. Implementation requires N-particle draft generation and imp
 
 (source: raw/2026-04-24-smc-sd-arxiv.md)
 
+## DiP-SD: Distributed Pipelined Speculative Decoding at the Edge (arXiv 2604.20919, April 2026)
+
+DiP-SD moves speculative decoding to a **distributed edge setting**: on-device small LLMs (phones/tablets) serve as draft models; a centralized edge server runs the large target model for batch verification. This is architecturally distinct from all other SD variants in this KB, which assume co-located draft and target.
+
+**Two parallelism dimensions:**
+1. **Device-level distributed drafting**: N users draft K tokens in parallel on their devices simultaneously — server's verification cost amortizes across the N-user batch
+2. **Phase-level draft-verify pipelining**: device drafting for batch i+1 overlaps with server verification of batch i, eliminating the idle "wait for verify" phase in naive distributed SD
+
+**Joint optimization**: DiP-SD co-optimizes user-to-batch assignment, per-user speculation length K, and pipeline batch count under per-user latency constraints. Objective: maximize expected accepted tokens per unit time.
+
+**Claim**: "first SD scheme to exploit batch-level pipeline parallelism between distributed drafting and centralized verification" (source: raw/2026-04-26-dip-sd-arxiv-2604-20919.md)
+
+**Authors:** Yaodan Xu, Sheng Zhou, Zhisheng Niu. Submitted April 22, 2026.
+
+**vLLM relevance:** Not integrated into vLLM; the edge deployment model (device draft + server verify) differs from vLLM's co-located assumption. However, the per-request adaptive K insight aligns with open questions about per-request K tuning in vLLM's static-K spec decode pipeline.
+
+**Limitation in sourcing:** arXiv HTML returned 403; specific speedup numbers unavailable. Paper reports "superior performance across all test points" vs. naive distributed SD and greedy batching.
+
+(source: raw/2026-04-26-dip-sd-arxiv-2604-20919.md)
+
 ## Open Questions
 - What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?
 - Does CUDA graph Eagle prefill improve latency for all Eagle variants (Eagle-1, Eagle-2, Eagle-3, P-EAGLE)?
@@ -173,3 +193,6 @@ No vLLM integration. Implementation requires N-particle draft generation and imp
 - Does SMC-SD's approximate distribution (within 3% accuracy) degrade further for reasoning-heavy tasks that require exact token-level fidelity?
 - At what number of particles N does SMC-SD achieve the 2.36× speedup over standard spec decode? Is there a throughput/quality tradeoff with N?
 - Can SMC-SD be combined with P-EAGLE (use P-EAGLE for fast multi-token draft generation, SMC for better acceptance)?
+- What are DiP-SD's quantitative speedups vs naive distributed SD and greedy batching? (arXiv 2604.20919 full PDF not yet fetched)
+- Can DiP-SD's per-user adaptive K idea be adapted for vLLM's per-request K in co-located inference?
+- How does DiP-SD perform when device draft models are heterogeneous (different architectures/sizes across users)?

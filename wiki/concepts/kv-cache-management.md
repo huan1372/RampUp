@@ -2,8 +2,8 @@
 title: "KV Cache Management"
 tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md]
+updated: 2026-04-26
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md]
 related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -78,6 +78,20 @@ Full details at [Cross-Layer KV Compression](../techniques/cross-layer-kv-compre
 Extends the CPU-GPU KV cache offloading handler to support multi-group KV cache transfers. Previously, the offload path assumed a single KV cache group; architectures using multiple groups (e.g., MLA with separate compressed and uncompressed KV groups, or heterogeneous attention designs) could not use the offloader. This PR refactors `transfer_async` to handle group-specific sizes and block indices, with bounds checking. No performance benchmark numbers — correctness fix only.
 
 (source: raw/2026-04-22-vllm-prs-apr21-22.md)
+
+### HMA Multi-Group KV Offload Store (PR #39403, April 25, 2026)
+
+Part 11 of an ongoing HMA (Hierarchical Multi-token Attention) KV offload series. Extends the offloading scheduler's `build_connector_meta` to support **storing** KV blocks across multiple groups:
+
+- Calculates offloadable tokens per KV group independently
+- Manages block indices with group-specific partitioning during storage
+- Maintains bounds checking across all groups
+
+**Limitation:** Does not support sliding window attention or SSMs — scoped to standard attention patterns.
+
+**Context:** This enables KV cache offloading for HMA-class architectures (e.g., DeepSeek V4's CSA/HCA multi-tier KV layout). Prior to this series, the KV offloader could not function with multi-group KV cache layouts at all. No benchmark numbers — prerequisite infrastructure PR.
+
+(source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
 ### CUDAGraph Memory Profiling Default (PR #38284, April 21, 2026)
 

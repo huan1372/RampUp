@@ -1,9 +1,9 @@
 ---
 title: "DeepSeek V4 Hybrid Attention (CSA + HCA + mHC)"
-tags: [attention, long-context, sparse-attention, kv-cache, deepseek, moe, architecture]
+tags: [attention, long-context, sparse-attention, kv-cache, deepseek, moe, architecture, tool-calling]
 created: 2026-04-24
-updated: 2026-04-24
-sources: [raw/2026-04-24-deepseek-v4-vllm.md]
+updated: 2026-04-26
+sources: [raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-26-vllm-prs-apr25-26.md]
 related: [concepts/kv-cache-management.md, concepts/paged-attention.md, techniques/kv-cache-quantization.md, techniques/disaggregated-serving.md, techniques/speculative-decoding.md]
 ---
 
@@ -120,6 +120,19 @@ No external quality benchmarks (MMLU, HumanEval, etc.) available from sources co
 - Will vLLM eventually support CSA-style retrieval for other models, or is this V4-specific?
 - Does vLLM's PagedAttention block allocator handle compressed CSA blocks, or is a separate allocator used?
 
+## Post-Release Fixes (April 26, 2026)
+
+### DSML Token Leakage in Streaming Tool Calls (PR #40806)
+
+In streaming tool-call scenarios, the DSML (DeepSeek Markup Language) sentinel token `｜DSML｜` was leaking into streamed content when the `<｜DSML｜tool_calls>` marker spanned response chunk boundaries. The streaming parser was emitting partial marker text before confirming the sentinel was complete.
+
+**Fix:** Added `_extract_content()` with partial tag overlap detection and a `_sent_content_idx` cursor per request (same pattern used in KimiK2 and Glm4Moe parsers). Any text suffix that could form a prefix of the start marker is buffered until confirmed.
+
+**Impact:** Correctness fix — eliminates garbled output in streaming tool-call responses. No throughput or latency change. Affects DeepSeek V4, V4-Flash, and V3.2 models on all GPU configurations.
+
+(source: raw/2026-04-26-vllm-prs-apr25-26.md)
+
 ## Sources
 
 - [raw/2026-04-24-deepseek-v4-vllm.md](../../raw/2026-04-24-deepseek-v4-vllm.md) — primary source for all DeepSeek V4 architecture details and vLLM implementation
+- [raw/2026-04-26-vllm-prs-apr25-26.md](../../raw/2026-04-26-vllm-prs-apr25-26.md) — DSML streaming fix (PR #40806)

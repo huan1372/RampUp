@@ -1,9 +1,9 @@
 ---
 title: "Disaggregated Serving (Prefill-Decode Separation)"
-tags: [architecture, serving, latency, scale, kv-connector, eplb, nixl]
+tags: [architecture, serving, latency, scale, kv-connector, eplb, nixl, flashinfer, nvlink]
 created: 2026-04-14
-updated: 2026-04-25
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-25-vllm-prs-apr24-25.md]
+updated: 2026-04-26
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md]
 related: [concepts/chunked-prefill.md, concepts/continuous-batching.md, techniques/tensor-parallelism.md, techniques/speculative-decoding.md, concepts/kv-cache-management.md, concepts/deepseek-v4-attention.md]
 ---
 
@@ -129,6 +129,21 @@ NIXL EP (the NIXL-library-based Expert Parallelism backend) follows the batched-
 Fixed in tensor-parallelism layer but relevant here: EPLB's fused MoE router had a hash collision bug causing >90% load imbalance when `top_k` was a multiple of the replica count. Fixed via Knuth multiplicative hash. Throughput impact: max/mean workload ratio 1.2 → 1.07 on Qwen3.5-A17B / 8× B200. See [Tensor Parallelism](tensor-parallelism.md).
 
 (source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
+## Post-v0.20.0 Fixes: April 25–26, 2026
+
+### FlashInfer NVLink MNNVL Workspace Sizing Fix (PR #40893, April 26, 2026)
+
+The FlashInfer NVLink managers (`FlashInferNVLinkOneSidedManager`, `FlashInferNVLinkTwoSidedManager`) were allocating their MNNVL workspace to the **DP group size** instead of the **EP group size**. When `dp_size != ep_size`, both managers raised assertion failures during initialization:
+
+- One-sided path: kernel asserts `workspace.size(0) == moe_ep_size`
+- Two-sided path: similar mismatch via `MnnvlMemory.set_comm_from_config`
+
+**Fix:** Both managers updated to use `self.cpu_group` (always the EP group for EP communicators) rather than `get_dp_group().cpu_group`.
+
+**Impact:** Correctness fix for any multi-node deployment using FlashInfer NVLink with combined DP+EP where `dp_size != ep_size`. Validated on Kimi-K2.5-NVFP4 with TP=2, DP=4, EP. This configuration (high DP + EP + NVLink) is the standard Blackwell scale-out configuration for production MoE serving.
+
+(source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
 ## Open Questions
 - What's the break-even point where disaggregation outperforms co-located serving?

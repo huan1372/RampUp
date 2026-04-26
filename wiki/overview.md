@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-25
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md]
+updated: 2026-04-26
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -179,6 +179,26 @@ No new numbered release. Three technically significant PRs merged:
 - **PR #40412 — NIXL EP batched-expert consistency**: Fixes silent miscategorization of NIXL EP in fused MoE configuration, ensuring NIXL EP and DeepEP LL are treated equivalently for activation format, shared-expert handling, and FP4 selection. See [Disaggregated Serving](techniques/disaggregated-serving.md).
 
 (source: raw/2026-04-25-vllm-prs-apr24-25.md)
+
+### vLLM Post-v0.20.0 PRs: April 25–26, 2026
+
+No new numbered release. Four PRs of technical significance merged:
+
+- **PR #40893 (Apr 26) — FlashInfer NVLink MNNVL workspace sizing fix**: Both FlashInfer NVLink managers allocated workspace to the DP group size instead of the EP group size. When `dp_size != ep_size`, an assertion failure crashed initialization. Fix: use `self.cpu_group` (always the EP group on EP communicators). Validated on Kimi-K2.5-NVFP4 with TP=2, DP=4, EP. This configuration — high DP + EP + multi-node NVLink — is the standard Blackwell MoE scale-out pattern. See [Disaggregated Serving](techniques/disaggregated-serving.md).
+
+- **PR #40865 (Apr 25) — MoE routed output unpadding fix**: MoE runner was unconditionally unpadding (truncating) routed output before shared-expert addition, crashing GPT-OSS 20B on B200 (non-contiguous tensor error). Fix: conditional on `has_shared_expert or routed_output_transform`. Preserves Nemotron-Nano-v3 behavior. See [Tensor Parallelism](techniques/tensor-parallelism.md).
+
+- **PR #39403 (Apr 25) — HMA multi-group KV offload store**: Part 11 of the HMA KV offload series. Extends `build_connector_meta` to calculate and store KV blocks across multiple groups, enabling KV cache offloading for HMA-class architectures (prerequisite for DeepSeek V4-style multi-tier KV). See [KV Cache Management](concepts/kv-cache-management.md).
+
+- **PR #40806 (Apr 26) — DSML streaming fix for DeepSeek V4/3.2**: DSML sentinel token `｜DSML｜` leaked into streamed content when the marker spanned chunk boundaries. Fix adds `_extract_content()` with partial tag overlap detection. Correctness fix for streaming tool calls on V4, V4-Flash, V3.2. See [DeepSeek V4 Attention](concepts/deepseek-v4-attention.md).
+
+(source: raw/2026-04-26-vllm-prs-apr25-26.md)
+
+### DiP-SD: Distributed Pipelined Speculative Decoding at the Edge (arXiv 2604.20919, April 2026)
+
+Introduces speculative decoding to the **multi-user edge inference** setting where on-device small LLMs draft and an edge server verifies. Two novel parallelism dimensions: (1) device-level distributed drafting (N users draft simultaneously), (2) phase-level draft-verify pipelining (device drafting for batch i+1 overlaps server verification of batch i). Co-optimizes user-to-batch assignment, per-user K, and pipeline batch count. Claims to be the first SD scheme to exploit batch-level pipeline parallelism in the distributed draft-verify setting. Not integrated into vLLM; relevant to per-request K tuning research. See [Speculative Decoding](techniques/speculative-decoding.md).
+
+(source: raw/2026-04-26-dip-sd-arxiv-2604-20919.md)
 
 ## Open Questions
 
