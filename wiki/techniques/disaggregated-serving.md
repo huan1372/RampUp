@@ -2,8 +2,8 @@
 title: "Disaggregated Serving (Prefill-Decode Separation)"
 tags: [architecture, serving, latency, scale, kv-connector, eplb, nixl, flashinfer, nvlink]
 created: 2026-04-14
-updated: 2026-04-26
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md]
+updated: 2026-04-27
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-roadmap-q1-2026.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/chunked-prefill.md, concepts/continuous-batching.md, techniques/tensor-parallelism.md, techniques/speculative-decoding.md, concepts/kv-cache-management.md, concepts/deepseek-v4-attention.md]
 ---
 
@@ -144,6 +144,18 @@ The FlashInfer NVLink managers (`FlashInferNVLinkOneSidedManager`, `FlashInferNV
 **Impact:** Correctness fix for any multi-node deployment using FlashInfer NVLink with combined DP+EP where `dp_size != ep_size`. Validated on Kimi-K2.5-NVFP4 with TP=2, DP=4, EP. This configuration (high DP + EP + NVLink) is the standard Blackwell scale-out configuration for production MoE serving.
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
+
+## Post-v0.20.0 Fixes: April 26–27, 2026
+
+### KV Offload: Export Full KV Cache for Remote Decode (PR #40346, April 26, 2026)
+
+In P/D disaggregated serving where a prefill node must transfer the complete KV cache to a remote decode node (`do_remote_decode=True`), the `OffloadingConnector` was only offloading **new (incremental) blocks** since the last store. For remote decode, the decode node needs the **full** KV cache, not just the delta.
+
+**Fix:** Resets `start_block_idx` to 0 when `kv_transfer_params["do_remote_decode"]` is enabled, forcing export of all blocks. **No-op with local backends:** backends detect already-cached blocks and skip re-copying.
+
+**Impact:** Enables CPU-backed cross-node KV transfer for P/D serving (complement to direct GPU-GPU NVLink/RDMA paths). Surgical one-field change; only active when `do_remote_decode=True`.
+
+(source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
 ## Open Questions
 - What's the break-even point where disaggregation outperforms co-located serving?

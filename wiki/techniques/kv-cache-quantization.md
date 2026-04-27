@@ -2,8 +2,8 @@
 title: "KV Cache Quantization"
 tags: [quantization, kv-cache, memory, compression, turboquant, isoquant, sequential-compression, flashattention, channel-elimination, grace]
 created: 2026-04-16
-updated: 2026-04-24
-sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-grace-kv-arxiv.md]
+updated: 2026-04-27
+sources: [raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/kv-cache-management.md, techniques/fp8-quantization.md, techniques/prefix-caching.md, techniques/cross-layer-kv-compression.md, concepts/deepseek-v4-attention.md]
 ---
 
@@ -62,7 +62,7 @@ A sub-4-bit online KV compression approach using asymmetric treatment of keys an
 - No offline preparation required
 - Hardware-accelerated on H100, H200, B200; software fallback on older GPUs
 
-### TurboQuant (as of April 23, 2026)
+### TurboQuant (as of April 27, 2026)
 - Merged into vLLM main in PR #38479 (April 15, 2026)
 - Refined in PR #40194 (April 17-19, 2026): removed redundant random sign flip from the WHT pipeline; reduces per-token KV quantization overhead without affecting quality
 - **FA3/FA4 prefill support (PR #40092, April 23, 2026):** TurboQuant's prefill paths previously defaulted to FA2 on all hardware. PR #40092 adds FA version detection: FA3 is selected on SM90 (Hopper: H100, H200, H20), FA4 on SM100 (Blackwell). Also fixes mixed-backend failures when a model routes some layers to TurboQuant and others to standard FlashAttention. Unlocks the following throughput improvements on NVIDIA H20 (SM90):
@@ -73,6 +73,18 @@ A sub-4-bit online KV compression approach using asymmetric treatment of keys an
   | long_balanced | +46–58% | −62–63% |
 
   (source: raw/2026-04-23-vllm-prs-apr22-23.md)
+
+- **Long-context memory optimization (PR #40941, April 27, 2026):** Per-layer dequantization buffers grew with context length, consuming 58.6 GB at 1M tokens (32B model, TP=4). PR #40941 moves buffers to a shared WorkspaceManager pool (one layer's worth at a time), adds FP16 Hadamard rotation (vs float32), eliminates a redundant `float16_copy` decode kernel, and pre-allocates continuation buffers. Memory savings and CUDA Graph compatibility:
+
+  | Context | Memory saved |
+  |---------|-------------|
+  | 8K | 472 MB |
+  | 128K | 7.4 GB |
+  | 1M | **57.6 GB** |
+
+  Enables CUDA Graph capture for TurboQuant (previously blocked by variable-size per-layer buffers). Decode throughput unchanged (~44 tok/s). 117 unit tests pass.
+
+  (source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
 - Targets vLLM V1 attention backend only
 - Flag: `--kv-cache-dtype <preset>` where preset is one of: `turboquant_k8v4`, `turboquant_4bit_nc`, `turboquant_3bit_nc`, `tq_k4v3`
@@ -248,3 +260,4 @@ Note: DeepSeek V4's Compressed Sparse Attention (CSA) and Heavily Compressed Att
 - [raw/2026-04-22-isoquant-arxiv.md](../../raw/2026-04-22-isoquant-arxiv.md) — IsoQuant and RotorQuant rotation family
 - [raw/2026-04-22-sequential-kv-trie-arxiv.md](../../raw/2026-04-22-sequential-kv-trie-arxiv.md) — sequential compression beyond per-vector Shannon limit
 - [raw/2026-04-23-vllm-prs-apr22-23.md](../../raw/2026-04-23-vllm-prs-apr22-23.md) — PR #40092 TurboQuant FA3/FA4 prefill support
+- [raw/2026-04-27-vllm-prs-apr26-27.md](../../raw/2026-04-27-vllm-prs-apr26-27.md) — PR #40941 TurboQuant long-context memory optimization (57.6 GB saved at 1M tokens), CUDA Graph compatibility

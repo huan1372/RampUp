@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-26
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md]
+updated: 2026-04-27
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -199,6 +199,22 @@ No new numbered release. Four PRs of technical significance merged:
 Introduces speculative decoding to the **multi-user edge inference** setting where on-device small LLMs draft and an edge server verifies. Two novel parallelism dimensions: (1) device-level distributed drafting (N users draft simultaneously), (2) phase-level draft-verify pipelining (device drafting for batch i+1 overlaps server verification of batch i). Co-optimizes user-to-batch assignment, per-user K, and pipeline batch count. Claims to be the first SD scheme to exploit batch-level pipeline parallelism in the distributed draft-verify setting. Not integrated into vLLM; relevant to per-request K tuning research. See [Speculative Decoding](techniques/speculative-decoding.md).
 
 (source: raw/2026-04-26-dip-sd-arxiv-2604-20919.md)
+
+### vLLM Post-v0.20.0 PRs: April 26–27, 2026
+
+No new numbered release. Five PRs of technical significance:
+
+- **PR #40941 (Apr 27) — TurboQuant shared dequant buffers**: Per-layer dequant buffers consumed 57.6 GB at 1M tokens (32B model, TP=4); moved to global WorkspaceManager pool (one layer's worth reused). Memory savings: 472 MB at 8K, 7.4 GB at 128K, **57.6 GB at 1M**. Enables CUDA Graph capture for TurboQuant. No throughput change. Makes long-context TurboQuant inference practical. See [KV Cache Quantization](techniques/kv-cache-quantization.md).
+
+- **PR #40950 (Apr 27) — DeepSeek V4 SiLU clamp for shared expert**: Numerical stability fix baking clamp limits into the `silu_and_mul` CUDA kernel for V4's `DeepseekV4MLP` shared expert. Prevents overflow at extreme activation magnitudes. See [DeepSeek V4 Attention](concepts/deepseek-v4-attention.md).
+
+- **PR #38065 (Apr 27) — FP8 FlashInfer attention for ViT encoders**: FP8 quantization for Qwen3 VL family ViT encoder attention via cuDNN backend. On Qwen3-VL-30B / GB200: 1.08× at QHD, **1.18× at 4K** resolution. Core kernel 1.42× on GB300. Requires SM90+, cuDNN 9.17.1+. Benefit is resolution-dependent — HD resolution sees slight regression. See [FP8 Quantization](techniques/fp8-quantization.md).
+
+- **PR #40946 (Apr 27) — SWA/chunked-local scheduler admission fix**: Fixes scheduler deadlock on hybrid SWA + full-attention models (Mistral, Gemma SWA variants). Root cause: startup pool sizer accounted for block recycling, runtime admission gate did not — deadlocking on long prompts. Unified `max_admission_blocks_per_request` method resolves the formula mismatch. See [KV Cache Management](concepts/kv-cache-management.md).
+
+- **PR #40346 (Apr 26) — KV offload all blocks for remote decode in P/D**: Resets `start_block_idx` to 0 when `do_remote_decode=True`, exporting full KV state to CPU for cross-node decode. Prerequisite for CPU-backed P/D transport (complement to direct NVLink/RDMA paths). See [Disaggregated Serving](techniques/disaggregated-serving.md).
+
+(source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
 ## Open Questions
 

@@ -1,9 +1,9 @@
 ---
 title: "FP8 Quantization"
-tags: [quantization, memory, throughput, hardware, mla, deepseek, kernels, jit]
+tags: [quantization, memory, throughput, hardware, mla, deepseek, kernels, jit, vit, multimodal]
 created: 2026-04-14
-updated: 2026-04-25
-sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-25-vllm-prs-apr24-25.md]
+updated: 2026-04-27
+sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md, techniques/fp4-quantization.md]
 ---
 
@@ -101,6 +101,38 @@ Humming's JIT compilation model makes it the most format-flexible backend curren
 
 (source: raw/2026-04-25-vllm-prs-apr24-25.md)
 
+## FP8 Attention for Vision Transformer (ViT) Encoders (PR #38065, April 27, 2026)
+
+Multimodal workloads bottleneck on the ViT encoder once the language model is quantized. PR #38065 extends FP8 to ViT encoder attention via the FlashInfer cuDNN backend.
+
+### Scope
+- **Supported models:** Qwen3 VL family: `qwen3_vl`, `qwen3_vl_moe`, `qwen3_5`, `qwen3_5_moe`
+- **Hardware requirement:** SM90+ (Hopper or Blackwell); no-op fallback on older GPUs
+- **cuDNN minimum:** version 9.17.1
+- **Scaling:** dynamic by default; static calibration optional for production
+
+### Performance (Qwen3-VL-30B, GB200, 3 images/request)
+
+E2E encoder forward time speedup:
+
+| Resolution | Speedup |
+|------------|---------|
+| HD (720×1280) | 0.87× (regression) |
+| FullHD (1080×1920) | 0.99× (neutral) |
+| QHD (1440×2560) | 1.08× |
+| 4K (2160×3840) | **1.18×** |
+
+Core cuDNN kernel (head_dim=128, seq_len=8192):
+
+| Hardware | Speedup |
+|----------|---------|
+| GB200 | 1.12× |
+| GB300 | **1.42×** |
+
+**Key pattern:** FP8 ViT attention only benefits at high resolution (long ViT sequence lengths). At HD, FP8 conversion overhead exceeds kernel speedup — configurable, not forced.
+
+(source: raw/2026-04-27-vllm-prs-apr26-27.md)
+
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?
 - What's the accuracy degradation for FP4 on reasoning-heavy tasks?
@@ -108,3 +140,5 @@ Humming's JIT compilation model makes it the most format-flexible backend curren
 - What is Humming's throughput vs Marlin on Hopper (SM90) for W4A16 (typical GPTQ config)?
 - Does Humming's JIT compilation add measurable first-request latency vs pre-compiled Marlin kernels?
 - Does Humming support FP8 KV cache quantization, or only weight/activation quantization?
+- Will FP8 ViT attention support be extended to non-Qwen3 multimodal models (e.g., LLaVA, InternVL)?
+- Does FP8 ViT attention interact with prefix caching on the vision token side?

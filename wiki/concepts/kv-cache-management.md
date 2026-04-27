@@ -2,8 +2,8 @@
 title: "KV Cache Management"
 tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu]
 created: 2026-04-14
-updated: 2026-04-26
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md]
+updated: 2026-04-27
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -92,6 +92,22 @@ Part 11 of an ongoing HMA (Hierarchical Multi-token Attention) KV offload series
 **Context:** This enables KV cache offloading for HMA-class architectures (e.g., DeepSeek V4's CSA/HCA multi-tier KV layout). Prior to this series, the KV offloader could not function with multi-group KV cache layouts at all. No benchmark numbers — prerequisite infrastructure PR.
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
+
+### SWA/Chunked-Local Scheduler Admission Deadlock Fix (PR #40946, April 27, 2026)
+
+On **hybrid full + sliding-window attention (SWA)** models (e.g., Mistral, Gemma variants) and models using chunked local attention, the runtime admission gate could reject long prompts that would actually fit in the KV pool, causing a **scheduler deadlock** — the request was perpetually refused even with sufficient memory.
+
+**Root cause:** Two code paths computed KV block requirements with mismatched formulas:
+1. **Startup pool sizer** — correctly accounted for block recycling (`SlidingWindowManager.remove_skipped_blocks` frees out-of-window blocks during chunked prefill)
+2. **Runtime admission gate** — did not account for this recycling; overestimated required blocks
+
+When the pool was sized at the startup minimum (exactly large enough for the recycling-aware worst case), the admission gate's overestimate caused deadlock.
+
+**Fix:** A unified `max_admission_blocks_per_request` method on both `SlidingWindowSpec` and `ChunkedLocalAttentionSpec` gives one source of truth for both paths. `max_num_batched_tokens` is threaded through the KV cache coordination layers so the recycling-aware bound is available at admission time.
+
+**Impact:** Correctness fix. No performance change. Affects SWA and chunked-local attention models with long prompts.
+
+(source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
 ### CUDAGraph Memory Profiling Default (PR #38284, April 21, 2026)
 

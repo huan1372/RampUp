@@ -2,8 +2,8 @@
 title: "DeepSeek V4 Hybrid Attention (CSA + HCA + mHC)"
 tags: [attention, long-context, sparse-attention, kv-cache, deepseek, moe, architecture, tool-calling]
 created: 2026-04-24
-updated: 2026-04-26
-sources: [raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-26-vllm-prs-apr25-26.md]
+updated: 2026-04-27
+sources: [raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md]
 related: [concepts/kv-cache-management.md, concepts/paged-attention.md, techniques/kv-cache-quantization.md, techniques/disaggregated-serving.md, techniques/speculative-decoding.md]
 ---
 
@@ -132,7 +132,18 @@ In streaming tool-call scenarios, the DSML (DeepSeek Markup Language) sentinel t
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
+## Post-Release Fixes (April 27, 2026)
+
+### SiLU Clamp Limit for Shared Expert (PR #40950)
+
+DeepSeek V4's shared expert uses a SiLU (`silu_and_mul`) activation. At extreme hidden-state magnitudes, unclamped SiLU values caused numerical instability. PR #40950 introduces a new `DeepseekV4MLP` class and bakes clamp limits into the `silu_and_mul` CUDA kernel (via a `clamp_limit` parameter) rather than applying a separate tensor clamp pass.
+
+**Impact:** Correctness fix for numerical overflow/underflow in the shared expert. Minor throughput improvement from eliminating a separate clamp kernel. Affects DeepSeek-V4, V4-Flash, and models using `DeepseekV4MLP`.
+
+(source: raw/2026-04-27-vllm-prs-apr26-27.md)
+
 ## Sources
 
 - [raw/2026-04-24-deepseek-v4-vllm.md](../../raw/2026-04-24-deepseek-v4-vllm.md) — primary source for all DeepSeek V4 architecture details and vLLM implementation
 - [raw/2026-04-26-vllm-prs-apr25-26.md](../../raw/2026-04-26-vllm-prs-apr25-26.md) — DSML streaming fix (PR #40806)
+- [raw/2026-04-27-vllm-prs-apr26-27.md](../../raw/2026-04-27-vllm-prs-apr26-27.md) — SiLU clamp for shared expert (PR #40950)
