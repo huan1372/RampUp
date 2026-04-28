@@ -2,8 +2,8 @@
 title: "Chunked Prefill"
 tags: [scheduling, latency, prefill, vllm-core]
 created: 2026-04-14
-updated: 2026-04-15
-sources: [raw/vllm-docs.md, raw/2026-04-14-vllm-rampup-recap.md]
+updated: 2026-04-28
+sources: [raw/vllm-docs.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-28-vllm-prs-apr27-28.md]
 related: [concepts/continuous-batching.md, techniques/disaggregated-serving.md, concepts/kv-cache-management.md]
 ---
 
@@ -40,6 +40,16 @@ Targets for fluid streaming: **TTFT < 200ms, ITL < 30ms**. Without chunking, a 3
 - Complements [Continuous Batching](continuous-batching.md) — without chunking, long prefills block the batch
 - Alternative to [Disaggregated Serving](../techniques/disaggregated-serving.md), which solves the same problem by running prefill on separate hardware
 - AMD ROCm supports a split prefill-decode attention mode (`VLLM_V1_USE_PREFILL_DECODE_ATTENTION=1`)
+
+## StepPool Embedding Alignment Fix (PR #41049, April 28, 2026)
+
+For embedding models processing long sequences (4K+ tokens), chunked prefill in `StepPool.forward` had a correctness bug: `pooled_data.append(data)` was placed outside the `if step_tag_id` conditional block, causing None to be appended twice per unfinished chunk. This misaligned pooling output with batch requests.
+
+**Fix:** Move the append inside the conditional block. Verified on TPU with 4K+ token sequences. No performance change — correctness fix only.
+
+**Scope:** Affects embedding models (e.g., retrieval, classification) using chunked prefill. Standard generative inference (`step_tag_id` not set) is unaffected.
+
+(source: raw/2026-04-28-vllm-prs-apr27-28.md)
 
 ## Open Questions
 - What's the optimal chunk size for different model sizes and context lengths?

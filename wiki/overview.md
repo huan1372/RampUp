@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-27
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md]
+updated: 2026-04-28
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -215,6 +215,20 @@ No new numbered release. Five PRs of technical significance:
 - **PR #40346 (Apr 26) — KV offload all blocks for remote decode in P/D**: Resets `start_block_idx` to 0 when `do_remote_decode=True`, exporting full KV state to CPU for cross-node decode. Prerequisite for CPU-backed P/D transport (complement to direct NVLink/RDMA paths). See [Disaggregated Serving](techniques/disaggregated-serving.md).
 
 (source: raw/2026-04-27-vllm-prs-apr26-27.md)
+
+### vLLM Post-v0.20.0 PRs: April 27–28, 2026
+
+No new numbered release. Four PRs merged:
+
+- **PR #40410 (Apr 27) — Eagle prefill metadata skip in MRV2**: Passes the target model's pre-built `CapturedAttentionState` (attention metadata + slot mappings) to `PrefillEagleCudaGraphManager` instead of rebuilding. Previously rebuilt three times per speculative step; now rebuilt once. ~5–10% end-to-end latency improvement for Eagle speculative decode. See [Model Runner V2](concepts/model-runner-v2.md), [Speculative Decoding](techniques/speculative-decoding.md).
+
+- **PR #39930 (Apr 28) — Independent drafter attention backend selection**: New `--speculative-config.attention_backend` option breaks the forced drafter=target backend coupling. Drafter auto-selects independently when unspecified (not inherited). Resolves MLA-vs-GQA incompatibilities and non-causal attention failures (e.g., DFlash). See [Speculative Decoding](techniques/speculative-decoding.md).
+
+- **PR #41049 (Apr 28) — StepPool None append fix for chunked prefill embeddings**: Fixes double-append bug in `StepPool.forward` that misaligned pooling output with batch requests for embedding models using long-sequence chunked prefill (4K+ tokens). Correctness fix; no throughput change. See [Chunked Prefill](concepts/chunked-prefill.md).
+
+- **PR #39141 (Apr 27) — TRTLLM MoE routing method update**: Adds `SigmoidRenorm` and `MiniMax2` routing methods to TRT-LLM MoE backend, aligned with FlashInfer v0.6.8. Reclassifies `Custom`/`Simulated` as internal vLLM-specific. Performance improvement for MiniMax-series model serving via TRT-LLM backend. See [Tensor Parallelism](techniques/tensor-parallelism.md).
+
+(source: raw/2026-04-28-vllm-prs-apr27-28.md)
 
 ## Open Questions
 

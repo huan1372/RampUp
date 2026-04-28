@@ -2,8 +2,8 @@
 title: "Speculative Decoding"
 tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge]
 created: 2026-04-14
-updated: 2026-04-26
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md]
+updated: 2026-04-28
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-28-vllm-prs-apr27-28.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -177,6 +177,32 @@ DiP-SD moves speculative decoding to a **distributed edge setting**: on-device s
 **Limitation in sourcing:** arXiv HTML returned 403; specific speedup numbers unavailable. Paper reports "superior performance across all test points" vs. naive distributed SD and greedy batching.
 
 (source: raw/2026-04-26-dip-sd-arxiv-2604-20919.md)
+
+## Eagle Prefill Metadata Skip (PR #40410, April 27, 2026)
+
+During Eagle speculative decoding in MRV2, attention metadata was rebuilt three times per step (target, Eagle prefill, draft decode). PR #40410 eliminates the redundant rebuild in the Eagle prefill phase by passing the target model's pre-built `CapturedAttentionState` to `PrefillEagleCudaGraphManager`. Draft decode continues to build independently.
+
+**Result:** ~5–10% end-to-end latency improvement for Eagle speculative decode paths.
+
+This is distinct from the v0.20.0 change that enabled CUDA graph capture for Eagle prefill (reducing kernel launch overhead): that change captured the graph; this change removes redundant work within each graph capture cycle.
+
+(source: raw/2026-04-28-vllm-prs-apr27-28.md)
+
+## Independent Drafter Attention Backend Selection (PR #39930, April 28, 2026)
+
+Previously, the drafter model's attention backend was forced to match the target model's backend — causing failures when the two models had incompatible attention requirements (MLA drafter with GQA target; DFlash requiring non-causal attention not supported by the target's backend).
+
+**Change:** New `--speculative-config.attention_backend` option. Unlike `--moe-backend`, the drafter does **not** inherit the target's backend when unspecified, because incompatibilities are common. Both backends auto-select independently.
+
+**Behavior:**
+- Neither specified → both auto-select independently
+- Target specified, drafter not → drafter still auto-selects (no inheritance)
+- Drafter specified, target not → each uses its own
+- Both specified → each uses its own
+
+**Concrete fix:** Resolves `ValueError: Selected backend TRITON_ATTN is not valid ... Reason: non-causal attention not supported` when using DFlash backends as drafter.
+
+(source: raw/2026-04-28-vllm-prs-apr27-28.md)
 
 ## Open Questions
 - What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?

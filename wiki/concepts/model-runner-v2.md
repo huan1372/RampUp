@@ -2,8 +2,8 @@
 title: "Model Runner V2 (MRV2)"
 tags: [vllm-core, architecture, execution, compile-time, torch-compile, ray, aot]
 created: 2026-04-14
-updated: 2026-04-24
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md]
+updated: 2026-04-28
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-28-vllm-prs-apr27-28.md]
 related: [concepts/paged-attention.md, techniques/speculative-decoding.md, techniques/tensor-parallelism.md]
 ---
 
@@ -98,6 +98,18 @@ Enable on v0.18.x: `export VLLM_USE_V2_MODEL_RUNNER=1`. No API changes.
 - Executes models using [PagedAttention](paged-attention.md) for memory management
 - Integrates with [Speculative Decoding](../techniques/speculative-decoding.md) via the rejection sampler
 - Supports [Tensor Parallelism](../techniques/tensor-parallelism.md) via piecewise CUDA graphs
+
+## Eagle Prefill Metadata Optimization (PR #40410, April 27, 2026)
+
+PR #40410 eliminates redundant attention metadata reconstruction during Eagle speculative decoding in MRV2. Previously, metadata was rebuilt three times per speculative step (target model, Eagle prefill, draft decode). Now it is rebuilt once.
+
+**Mechanism:** A new `CapturedAttentionState` named tuple (in `cudagraph_utils.py`) bundles attention metadata + slot mappings into a single object. `PrefillEagleCudaGraphManager` now accepts a pre-constructed `CapturedAttentionState` from the target model rather than rebuilding; `DecodeEagleCudaGraphManager` continues to build independently (decode has different requirements).
+
+**Performance:** ~5–10% end-to-end latency improvement for Eagle speculative decoding, from eliminating per-step GPU memory operations and kernel invocations for metadata construction.
+
+This complements the earlier v0.20.0 change that added full CUDA graph capture for Eagle prefill (PR enabling CUDA graph Eagle prefill, April 23, 2026): that change captured the graph; this change removes waste within the captured execution.
+
+(source: raw/2026-04-28-vllm-prs-apr27-28.md)
 
 ## Open Questions
 - Which models still require MRV1 as of v0.20.0? When will they migrate?
