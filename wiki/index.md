@@ -2,7 +2,7 @@
 title: "Master Index"
 tags: [index, meta]
 created: 2026-04-14
-updated: 2026-04-28
+updated: 2026-04-30
 ---
 
 
@@ -25,7 +25,7 @@ updated: 2026-04-28
 - [KV Cache Quantization](techniques/kv-cache-quantization.md) — sub-FP8 compression spectrum; TurboQuant 2-bit (4× capacity, v0.20.0), 2.6–4.9× with FA3/FA4 prefill support; TurboQuant shared dequant buffers (57.6 GB saved at 1M ctx, CUDA Graph enabled, PR #40941, Apr 27 2026); GRACE graph-guided channel elimination (60% KV reduction, arXiv 2604.16983); IsoQuant SO(4) rotation family (research); sequential compression beyond Shannon limit (research)
 - [Cross-Layer KV Compression](techniques/cross-layer-kv-compression.md) — architectural 50% KV reduction; YOCO++ (Apr 2026 research, not yet in vLLM)
 - [CPU-GPU Hybrid Attention](techniques/cpu-gpu-hybrid-attention.md) — HybridGen: CPU as active attention compute participant via CXL memory; 1.41×–3.2× over baselines (arXiv 2604.18529, Apr 2026)
-- [Speculative Decoding](techniques/speculative-decoding.md) — draft-verify acceleration; P-EAGLE, CSD (2.33× speedup); SMC-SD particle resampling (2.36× over standard SD, arXiv 2604.15672); SpecGuard; CPU draft-model (v0.20.0); CUDA graph Eagle prefill (v0.20.0); DiP-SD distributed pipelined SD at edge (arXiv 2604.20919, Apr 2026); Eagle prefill metadata skip ~5-10% latency (PR #40410, Apr 27 2026); independent drafter attention backend (PR #39930, Apr 28 2026)
+- [Speculative Decoding](techniques/speculative-decoding.md) — draft-verify acceleration; P-EAGLE, CSD (2.33× speedup); SMC-SD particle resampling (2.36× over standard SD, arXiv 2604.15672); SpecGuard; CPU draft-model (v0.20.0); CUDA graph Eagle prefill (v0.20.0); DiP-SD distributed pipelined SD at edge (arXiv 2604.20919, Apr 2026); Eagle prefill metadata skip ~5-10% latency (PR #40410, Apr 27 2026); independent drafter attention backend (PR #39930, Apr 28 2026); EAGLE3 production benchmarks: 22-49% throughput, 18-33% latency vs NIM, 50% GPU cost reduction, gamma=3 acceptance 35.5% stable (arXiv 2604.19767, PayPal, Apr 2026)
 - [Prefix Caching](techniques/prefix-caching.md) — reusing KV cache across requests
 - [Disaggregated Serving](techniques/disaggregated-serving.md) — separating prefill and decode; StreamServe adaptive spec depth; Prefill-as-a-Service cross-DC; 3FS KVConnector (v0.20.0); EPLB improved comms (v0.20.0); Nixl 0.10.1; NIXL EP batched-expert fix (PR #40412, Apr 24 2026); FlashInfer NVLink MNNVL workspace sizing fix (PR #40893, Apr 26 2026); full KV offload for remote decode in P/D (PR #40346, Apr 26 2026)
 - [Tensor Parallelism](techniques/tensor-parallelism.md) — splitting models across GPUs; ReaLB multimodal MoE EP load balancing via dynamic precision (1.29× layer speedup, implemented in vLLM, arXiv 2604.19503); EPLB replica bias fix via Knuth hash (1.2→1.07 max/mean ratio, PR #40810, Apr 24 2026); MoE routed output unpad fix for GPT-OSS/B200 (PR #40865, Apr 25 2026)
@@ -45,3 +45,4 @@ updated: 2026-04-28
 - [Collect run 2026-04-26](changelog/collect-2026-04-26.md) — vLLM post-v0.20.0 PRs: FlashInfer NVLink MNNVL workspace sizing fix (DP/EP mismatch crash, PR #40893); MoE routed output unpad fix (GPT-OSS B200, PR #40865); HMA multi-group KV offload store (PR #39403); DSML streaming fix for DeepSeek V4/3.2 (PR #40806); DiP-SD edge distributed pipelined speculative decoding (arXiv 2604.20919)
 - [Collect run 2026-04-27](changelog/collect-2026-04-27.md) — vLLM post-v0.20.0 PRs: TurboQuant shared dequant buffers (57.6 GB saved at 1M ctx, CUDA Graph enabled, PR #40941); DeepSeek V4 SiLU clamp for shared expert (PR #40950); FP8 FlashInfer ViT attention for Qwen3 VL (1.18× at 4K/GB200, PR #38065); SWA scheduler admission deadlock fix (PR #40946); full KV offload for remote decode (PR #40346)
 - [Collect run 2026-04-28](changelog/collect-2026-04-28.md) — vLLM post-v0.20.0 PRs: Eagle prefill metadata skip (PR #40410, ~5-10% latency); independent drafter attention backend selection (PR #39930); StepPool embedding alignment fix for chunked prefill (PR #41049); TRTLLM MoE routing update with SigmoidRenorm+MiniMax2 (PR #39141)
+- [Collect run 2026-04-30](changelog/collect-2026-04-30.md) — arXiv 2604.19767: EAGLE3 production study on PayPal commerce agent (22-49% throughput, 18-33% latency, 50% GPU cost vs NIM, gamma=3 acceptance 35.5% stable); no new vLLM release; no material perf PRs from Apr 29-30

@@ -1,9 +1,9 @@
 ---
 title: "Speculative Decoding"
-tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge]
+tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge, production]
 created: 2026-04-14
-updated: 2026-04-28
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-28-vllm-prs-apr27-28.md]
+updated: 2026-04-30
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md]
 related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
 ---
 
@@ -203,6 +203,29 @@ Previously, the drafter model's attention backend was forced to match the target
 **Concrete fix:** Resolves `ValueError: Selected backend TRITON_ATTN is not valid ... Reason: non-causal attention not supported` when using DFlash backends as drafter.
 
 (source: raw/2026-04-28-vllm-prs-apr27-28.md)
+
+## EAGLE3 Production Benchmarks: PayPal Commerce Agent (arXiv 2604.19767, April 2026)
+
+First published production deployment study of EAGLE3 speculative decoding via vLLM on a fine-tuned commerce SLM. Uses PayPal's fine-tuned `llama3.1-nemotron-nano-8B-v1` model; baseline is NVIDIA NIM on identical 2×H100 hardware.
+
+**Setup**: 40 configurations — gamma ∈ {3, 5}, concurrency ∈ {1–32}, temperature ∈ {0.0, 0.5}.
+
+| Config | Throughput gain vs NIM | Latency reduction vs NIM | Acceptance rate |
+|--------|------------------------|--------------------------|-----------------|
+| gamma=3 | **22–49%** | **18–33%** | **~35.5%** (stable across all concurrency/temperature) |
+| gamma=5 | diminishing | diminishing | **~25%** |
+
+**50% GPU cost reduction**: single H100 + EAGLE3 matches 2×H100 NIM. This makes speculative decoding economically compelling beyond latency reduction — it halves hardware cost for throughput-equivalent service.
+
+**Acceptance rate stability**: 35.5% held flat from concurrency=1 to concurrency=32. This contrasts with P-EAGLE's diminishing advantage at c=64 and suggests that EAGLE3 acceptance in structured-output workloads (commerce queries) scales more reliably than high-diversity reasoning tasks.
+
+**gamma=3 > gamma=5**: Longer speculation depth overshoots the predictable zone of structured commerce outputs. gamma=3 is the practical sweet spot for SLM workloads with structured outputs.
+
+**Quality**: LLM-as-Judge confirms no measurable quality degradation at either gamma setting.
+
+**Scope**: 8B fine-tuned SLM with structured commerce output distribution. Acceptance rates will differ for reasoning, code, or open-ended generation tasks.
+
+(source: raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md)
 
 ## Open Questions
 - What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?

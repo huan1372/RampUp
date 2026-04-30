@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-28
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md]
+updated: 2026-04-30
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -229,6 +229,18 @@ No new numbered release. Four PRs merged:
 - **PR #39141 (Apr 27) — TRTLLM MoE routing method update**: Adds `SigmoidRenorm` and `MiniMax2` routing methods to TRT-LLM MoE backend, aligned with FlashInfer v0.6.8. Reclassifies `Custom`/`Simulated` as internal vLLM-specific. Performance improvement for MiniMax-series model serving via TRT-LLM backend. See [Tensor Parallelism](techniques/tensor-parallelism.md).
 
 (source: raw/2026-04-28-vllm-prs-apr27-28.md)
+
+### EAGLE3 in Production: PayPal Commerce Agent (arXiv 2604.19767, April 2026)
+
+First published production deployment study of EAGLE3 speculative decoding via vLLM on a fine-tuned SLM (llama3.1-nemotron-nano-8B-v1, PayPal's commerce agent). Baseline: NVIDIA NIM on identical 2×H100 hardware.
+
+- **gamma=3**: 22–49% throughput improvement and 18–33% latency reduction vs NIM; acceptance rate ~35.5% stable across concurrency 1–32 and temperature {0, 0.5}
+- **GPU cost**: single H100 + EAGLE3 matches 2×H100 NIM → 50% hardware cost reduction
+- **Quality**: LLM-as-Judge confirms no degradation
+
+Key implication: on structured-output SLM workloads, EAGLE3 acceptance rates scale stably with concurrency (unlike the diminishing returns seen with P-EAGLE at high concurrency). Spec decode ROI is workload-dependent — commerce agents with predictable structure outperform open-ended generation settings.
+
+(source: raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md)
 
 ## Open Questions
 
