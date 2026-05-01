@@ -1,10 +1,10 @@
 ---
 title: "Speculative Decoding"
-tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge, production]
+tags: [latency, throughput, decoding, speculation, monte-carlo, smc, distributed-inference, edge, production, kv-reuse, long-range]
 created: 2026-04-14
-updated: 2026-04-30
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md]
-related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md]
+updated: 2026-05-01
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-p-eagle-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md, raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md]
+related: [concepts/model-runner-v2.md, concepts/continuous-batching.md, techniques/disaggregated-serving.md, concepts/kv-cache-management.md]
 ---
 
 # Speculative Decoding
@@ -227,13 +227,51 @@ First published production deployment study of EAGLE3 speculative decoding via v
 
 (source: raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md)
 
+## KVShot: Diagnosing Long-Range Draft Accuracy Decay (arXiv 2604.26412, April 2026)
+
+KVShot is a diagnostic framework (not a deployable system) that characterizes why hidden-state-based drafters (EAGLE, EAGLE-3, P-EAGLE, Medusa) show **long-range draft accuracy decay** — acceptance rate falls as the speculative step index increases — and tests whether exposing the target model's KV cache to the drafter can rescue this.
+
+**Root cause of decay:** The target hidden state is a biased context compression that emphasizes information relevant to the current position, suppressing context needed for later speculative steps. As step index k increases, the hidden-state summary becomes increasingly misaligned with what the drafter needs.
+
+**KVShot's three paradigms (tested on Qwen3-8B):**
+
+| Paradigm | Drafter input | Long-range acceptance | E2E speedup |
+|----------|---------------|----------------------|-------------|
+| Hidden-only (baseline) | Target hidden state | Lowest (decays with k) | Baseline |
+| **KV-only** | Target KV cache (explicit per-token history) | **Improved** | Marginal gain |
+| Hybrid | Both hidden state + KV cache | Moderate | Marginal |
+
+**Finding:** KV-Reuse improves long-range acceptance. The target KV cache preserves full token-level representations rather than collapsing history into a single hidden vector, reducing the drift problem. But **end-to-end speedups remain marginal** — acceptance rate gains do not translate proportionally to tokens/second.
+
+**Two structural bottlenecks identified:**
+
+1. **Shallow drafter architecture**: small drafters cannot compute accurate key projections for the target KV cache. Estimating "what the target model queries from this KV" requires depth; shallow drafters approximate it poorly regardless of what context they receive.
+
+2. **Sparse gradient signals**: during training, the drafter's KV-projection layers only receive gradient signal at positions where KV reuse diverges from hidden-state-only paths — a sparse subset of training steps. Sparse gradients → the KV projection mechanism is undertrained.
+
+**Proposed direction:** Block-wise training paradigms that explicitly force gradient flow through KV projection layers at every training step, rather than relying on the sparse incidental signal from end-to-end speculative training.
+
+**Implications for existing KB entries:**
+- **EAGLE-3 / P-EAGLE**: both use hidden-state compression. KVShot implies their long-range acceptance decay is architectural, not a training data problem; providing KV cache could help but needs architectural changes.
+- **CSD (arXiv 2604.13634)**: targets false rejections (semantically valid tokens rejected for lexical mismatch) — different failure mode from long-range drift. Complementary.
+- **SMC-SD (arXiv 2604.15672)**: replaces rejection sampling with importance weighting; does not address draft quality degradation at high k. Complementary.
+- **P-EAGLE's flat single-pass drafting**: also implicitly encodes the hidden-state context issue — all K positions are drafted from the same hidden-state snapshot.
+
+**Partially answers the open question** "Why does P-EAGLE's advantage diminish at high concurrency (c=64)?" — the diminishing advantage is at least partly from long-range drift accumulating across the K tokens at high batch sizes; this is distinct from KVShot's per-step k finding but points to the same root cause.
+
+**vLLM integration:** None; KVShot is a research diagnostic tool. Practical KV-aware drafters (if built) would require re-training EAGLE/P-EAGLE-class drafters with new block-wise training objectives.
+
+(source: raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md)
+
 ## Open Questions
 - What is the throughput of CPU draft models vs GPU draft models, and at what draft model size does CPU become impractical?
 - Does CUDA graph Eagle prefill improve latency for all Eagle variants (Eagle-1, Eagle-2, Eagle-3, P-EAGLE)?
 - What's the best draft model selection strategy for a given target model?
 - How does EAGLE-3 compare to vanilla speculative decoding in practice?
 - How does spec decode interact with chunked prefill scheduling?
-- Why does P-EAGLE's advantage diminish at high concurrency (c=64)? Is this a batching overhead issue or acceptance rate regression?
+- Why does P-EAGLE's advantage diminish at high concurrency (c=64)? Is this a batching overhead issue, long-range drift (per KVShot: arXiv 2604.26412), or acceptance rate regression from diverse batches?
+- Can block-wise training (KVShot proposal) be applied to existing EAGLE/P-EAGLE drafter checkpoints (fine-tune from existing drafter) or requires training from scratch?
+- At what speculative step index k does KVShot measure significant drift in Qwen3-8B — k=3, k=5, or later? Does this align with the EAGLE3 gamma=3 vs gamma=5 result from the PayPal study?
 - When will P-EAGLE drafter models be available for more target models beyond GPT-OSS and Qwen3-Coder?
 - Does CSD's 2.33× peak speedup hold at high concurrency, or does it share P-EAGLE's diminishing returns pattern?
 - What is the memory overhead of OCM's correction history at serving scale (thousands of concurrent requests)?

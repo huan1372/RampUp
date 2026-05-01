@@ -1,9 +1,9 @@
 ---
 title: "Tensor Parallelism"
-tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing, eplb]
+tags: [parallelism, multi-gpu, scale, moe, expert-parallelism, load-balancing, eplb, async-tp, fp8, torch-compile]
 created: 2026-04-14
-updated: 2026-04-26
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md]
+updated: 2026-05-01
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/redhat-tuning.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-05-01-vllm-prs-may1.md]
 related: [techniques/disaggregated-serving.md, concepts/model-runner-v2.md, techniques/fp8-quantization.md]
 ---
 
@@ -105,9 +105,25 @@ No performance impact — correctness fix only.
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
+## FlashInfer FP8 Async TP Fusion (PR #39505, May 1, 2026)
+
+Resolves a correctness and performance issue where `torch.compile` reordered FlashInfer FP8 GEMM operations and async TP allreduce collectives.
+
+**Async TP mechanism:** Async TP overlaps allreduce communication with the next layer's compute, hiding the collective latency behind useful work. The invariant is: FP8 GEMM → allreduce must be ordered (quantization must complete before communication begins). `torch.compile` did not respect this invariant, breaking the async TP schedule for FP8 models.
+
+**Fix:** New fusion pattern (FlashInfer FP8 GEMM + allreduce) plus compiler-level ordering constraints that prevent allreduce from being moved before FP8 quantization is complete.
+
+**Scope:** FP8 models at TP≥2 using `torch.compile`. Primarily affects Blackwell B200/GB200 multi-GPU configurations where async TP is the standard communication pattern.
+
+**Cross-reference:** Also documented in detail at [FP8 Quantization](fp8-quantization.md#flashinfer-fp8-async-tp-fusion-pr-39505-may-1-2026) (covers the quantization side of the fix).
+
+(source: raw/2026-05-01-vllm-prs-may1.md)
+
 ## Open Questions
 - What's the throughput crossover point between TP4×2 replicas vs TP8×1 replica for 70B models?
 - How does Async TP change the scaling characteristics?
 - Does ReaLB's per-rank FP4 assignment require Blackwell SM100 or does it work on H100 (SM90) with MXFP8 fallback?
 - How does ReaLB interact with vLLM's existing EPLB? Can they compose (EPLB for coarse routing, ReaLB for fine-grained precision adjustment)?
 - Does the Knuth multiplicative hash uniformly fix imbalance for all `top_k` / replica count ratios, or are there remaining edge cases at very large EP counts?
+- Does PR #39505's allreduce ordering fix measurably reduce TPOT for FP8 models at TP≥2, or was the async overlap already preserved via other means in most production configs?
+- Is async TP now enabled by default in v0.20.0+ for Blackwell multi-GPU, or is it still opt-in? (Q2 2026 roadmap states "Async TP enabled by default" as a target)

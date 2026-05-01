@@ -1,9 +1,9 @@
 ---
 title: "KV Cache Management"
-tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu]
+tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu, eviction, information-theory, swa]
 created: 2026-04-14
-updated: 2026-04-27
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md]
+updated: 2026-05-01
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-vllm-prs-may1.md]
 related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -93,6 +93,23 @@ Part 11 of an ongoing HMA (Hierarchical Multi-token Attention) KV offload series
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
 
+### HMA KV Offload Scheduler: Sliding Window Group Support (PR #41228, May 1, 2026)
+
+Part 12 of the HMA (Hybrid Multi-token Attention / Multi-group KV) offload series. Adds scheduler-side support for **sliding window attention (SWA) groups** within the KV offload path.
+
+**Background:** The HMA series is progressively extending the KV offload scheduler to handle multi-group KV cache architectures (e.g., DeepSeek V4's CSA+HCA+mHC layout). Prior PRs established multi-group transfer (#38453, April 22) and multi-group store (#39403, April 25). However, the offload scheduler did not know how to handle SWA groups, where only the most recent W tokens are "active" and older blocks can be freed — a property the offloader must track per-group independently.
+
+**Change:** The scheduler now tracks the sliding window horizon for each SWA group in a multi-group KV layout, correctly computing which blocks are offloadable vs. must remain in fast memory. Without this, attempting to combine KV offloading with hybrid full + SWA architectures would produce incorrect block accounting.
+
+**Scope:** Correctness prerequisite (no benchmark numbers) for models combining full-attention layers with SWA layers when using KV offloading. Enables future offloading for architectures like Mistral-class SWA or DeepSeek hybrid designs.
+
+**Series context:**
+- Part 11 (PR #39403, Apr 25): multi-group KV offload store
+- PR #40946 (Apr 27): SWA scheduler admission deadlock fix (separate fix, pre-offload path)
+- Part 12 (PR #41228, May 1): SWA group support in the offload scheduler itself
+
+(source: raw/2026-05-01-vllm-prs-may1.md)
+
 ### SWA/Chunked-Local Scheduler Admission Deadlock Fix (PR #40946, April 27, 2026)
 
 On **hybrid full + sliding-window attention (SWA)** models (e.g., Mistral, Gemma variants) and models using chunked local attention, the runtime admission gate could reject long prompts that would actually fit in the KV pool, causing a **scheduler deadlock** — the request was perpetually refused even with sufficient memory.
@@ -174,6 +191,31 @@ Practical implication: for k-step reasoning tasks, compressing KV cache to s < �
 
 (source: searched arXiv 2604.17935; full raw source not yet ingested due to limited fetchable content)
 
+### KV Cache Eviction: CapKV (arXiv 2604.25975, April 28, 2026)
+
+CapKV rethinks KV cache eviction — the decision of which token-level KV entries to drop when cache capacity is exceeded — through the **Information Bottleneck (IB)** principle, replacing ad-hoc heuristics (attention score accumulators used by H2O, SnapKV, ScissorHands) with a theoretically grounded objective.
+
+**Formulation:** Under a linear-Gaussian surrogate of attention, the optimal retained KV subset S maximizes mutual information I(Y; KV_S) between future attention output Y and retained KV pairs. This reduces to:
+
+> maximize log det(I + σ⁻² Kₛᵀ Kₛ) over subset S
+
+where Kₛ is the key matrix of retained entries — a **log-determinant maximization** problem.
+
+**CapKV implementation:** Approximates the log-det objective using **statistical leverage scores** — diagonal elements of the hat matrix H = K(KᵀK)⁻¹Kᵀ. Leverage score for entry i measures how much that entry influences the attention output: high leverage = hard to reconstruct from remaining entries. O(n) per eviction step.
+
+**Key insight vs prior heuristics:** Attention-score accumulators (H2O, SnapKV) approximate historical query relevance — a proxy for "was this entry attended to in the past?" CapKV approximates information capacity — "if this entry is dropped, how much does the output distribution shift?" These diverge at long contexts, explaining why heuristic methods degrade at 32K+ token sequences.
+
+**Results:** Consistently outperforms H2O, SnapKV, ScissorHands, Ada-KV across multiple models and long-context benchmarks; largest gains at high compression ratios. Specific accuracy numbers and model names not captured (arXiv HTML unavailable; sourced from search summaries).
+
+**vLLM integration status:** None. Requires modifications to the KV block allocator to run leverage score computation per step.
+
+**Relationship to other eviction/compression work:**
+- **GRACE (arXiv 2604.16983):** channel-level pruning (removes KV dimensions); CapKV is token-level eviction (removes entire token entries). Different axes — can be composed.
+- **TurboQuant/KV quantization:** compresses retained entries; orthogonal to eviction.
+- **TTKV (arXiv 2604.19769):** tiering without eviction; CapKV evicts. Complementary strategies.
+
+(source: raw/2026-05-01-arxiv-2604-25975-capkv.md)
+
 ## Key Parameters
 - `gpu_memory_utilization` — fraction of GPU memory for KV cache (**default: 0.92** as of PR #38284, April 21, 2026; previously 0.9; be cautious on memory-constrained GPUs)
 - `swap_space` — CPU memory for swapped-out KV blocks (in GB)
@@ -188,6 +230,9 @@ Practical implication: for k-step reasoning tasks, compressing KV cache to s < �
 - [CPU-GPU Hybrid Attention](../techniques/cpu-gpu-hybrid-attention.md) — HybridGen: CPU as active compute participant for KV-resident attention (arXiv 2604.18529)
 
 ## Open Questions
+- How does CapKV's leverage-score approximation scale with context length? At what n does O(n) per step become a bottleneck relative to attention compute?
+- Can CapKV be combined with TTKV (temporal tiering) — use tiering to partition "keep in HBM / move to DRAM" and CapKV to decide what to evict entirely?
+- Does the IB formulation in CapKV degrade for multi-query or grouped-query attention where the key matrix structure differs from the linear-Gaussian surrogate assumption?
 - How does TTKV's temporal tiering (arXiv 2604.19769) compare to HybridGen's semantic-aware placement? Can they be combined?
 - What is TTKV's sliding window size W (tokens in HBM) and how is it tuned for a given workload?
 - Does HybridGen's CPU attention work for reasoning tasks where far-back context is retroactively important?

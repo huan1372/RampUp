@@ -1,9 +1,9 @@
 ---
 title: "FP8 Quantization"
-tags: [quantization, memory, throughput, hardware, mla, deepseek, kernels, jit, vit, multimodal]
+tags: [quantization, memory, throughput, hardware, mla, deepseek, kernels, jit, vit, multimodal, blackwell, async-tp, torch-compile]
 created: 2026-04-14
-updated: 2026-04-27
-sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-27-vllm-prs-apr26-27.md]
+updated: 2026-05-01
+sources: [raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/rocm-optimization.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-05-01-vllm-prs-may1.md]
 related: [concepts/kv-cache-management.md, techniques/tensor-parallelism.md, techniques/kv-cache-quantization.md, techniques/fp4-quantization.md]
 ---
 
@@ -133,6 +133,38 @@ Core cuDNN kernel (head_dim=128, seq_len=8192):
 
 (source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
+## Faster Per-Token FP8 Group Quant Packed Kernel for Blackwell (PR #41326, May 1, 2026)
+
+Introduces a FP8 per-token group quantization kernel optimized specifically for Blackwell (SM100/SM120) GPUs. The "packed" design fuses the FP8 quantization step with the subsequent GEMM dispatch, reducing separate kernel launch overhead and HBM round-trip traffic vs. the prior separate-kernel sequence.
+
+**Per-token group quantization:** Applies a distinct FP8 scale factor per token per group of channels. This is finer-grained than per-tensor FP8 (one scale per entire tensor) — providing accuracy closer to FP16 while retaining FP8 compute throughput. The additional scale factors add minor memory overhead but negligible compute cost on Blackwell's native FP8 TensorCores.
+
+**"Packed" kernel:** The FP8 quantization and scale-factor computation are fused into the same CUDA kernel as the quantized GEMM, eliminating the intermediate store of quantized weights to HBM and reducing memory bandwidth pressure.
+
+**Scope:** Blackwell-specific (SM100/SM120). H100/H200 (SM90) fallback behavior is unchanged.
+
+**Relationship to existing FP8 work:**
+- Complements PR #38877 (MLA + Group FP8 fusion, April 22): that PR fused FP8 quant into MLA attention; this PR targets the general GEMM path (non-MLA linear layers)
+- Part of the broader FP8 group GEMM roadmap (vLLM issue #35792)
+
+(source: raw/2026-05-01-vllm-prs-may1.md)
+
+## FlashInfer FP8 Async TP Fusion (PR #39505, May 1, 2026)
+
+Adds a `torch.compile`-level fusion pass that combines FlashInfer FP8 GEMM operations with async tensor parallelism (TP) allreduce collectives, and preserves allreduce fusion ordering in the compiler.
+
+**Problem (GitHub issue #27985):** Async TP overlaps communication with computation by launching allreduce ops asynchronously while the next layer's computation begins. The FP8 quantization step must precede the allreduce. `torch.compile`'s fusion passes could reorder these ops, breaking the async TP overlap schedule or producing incorrect outputs for FP8 models at TP≥2.
+
+**Fix:** Two changes:
+1. Adds a fusion pattern that recognizes FlashInfer FP8 GEMM → allreduce sequences and correctly fuses them without reordering
+2. Adds compiler-level ordering constraints that preserve allreduce position relative to FP8 ops even when other fusion passes run
+
+**Scope:** Affects FP8-quantized models served with TP≥2 via `torch.compile`. Most impactful on Blackwell B200/GB200 multi-GPU deployments where async TP is the default communication pattern.
+
+**Relationship to tensor parallelism page:** Also documented at [Tensor Parallelism](tensor-parallelism.md#flashinfer-fp8-async-tp-fusion-pr-39505-may-1-2026).
+
+(source: raw/2026-05-01-vllm-prs-may1.md)
+
 ## Open Questions
 - How does FP8 KV cache interact with prefix caching quality?
 - What's the accuracy degradation for FP4 on reasoning-heavy tasks?
@@ -142,3 +174,5 @@ Core cuDNN kernel (head_dim=128, seq_len=8192):
 - Does Humming support FP8 KV cache quantization, or only weight/activation quantization?
 - Will FP8 ViT attention support be extended to non-Qwen3 multimodal models (e.g., LLaVA, InternVL)?
 - Does FP8 ViT attention interact with prefix caching on the vision token side?
+- Does PR #41326's packed kernel deliver measurable TPOT improvement over the prior separate-kernel path? (No benchmark numbers in the PR as captured)
+- Does PR #39505's allreduce fusion ordering constraint add compiler overhead (longer compile time) for models that don't use FP8 + async TP together?

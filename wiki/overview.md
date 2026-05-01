@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-04-30
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md]
+updated: 2026-05-01
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md, raw/2026-05-01-vllm-prs-may1.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -33,10 +33,10 @@ Based on Clarifai benchmarks (GPT-OSS-120B on 2x H100):
 
 ## Key Optimization Vectors
 
-1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026; WHT overhead reduced Apr 2026), cross-layer KV compression (YOCO++: 50% KV reduction via architecture, Apr 2026 research)
-2. **Compute** — speculative decoding (P-EAGLE 1.55–1.69×; CSD 2.33× peak, Apr 2026; Eagle3 + Gemma4 v0.19.1), continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
-3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving
-4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap; multimodal scheduler overhead reduction (Apr 2026)
+1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026; WHT overhead reduced Apr 2026), cross-layer KV compression (YOCO++: 50% KV reduction via architecture, Apr 2026 research); CapKV information-theoretic eviction via leverage scores (outperforms H2O/SnapKV, Apr 28 2026 research)
+2. **Compute** — speculative decoding (P-EAGLE 1.55–1.69×; CSD 2.33× peak, Apr 2026; Eagle3 + Gemma4 v0.19.1); FP8 per-token group quant packed kernel for Blackwell (PR #41326, May 1 2026); continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
+3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving; FlashInfer FP8 async TP allreduce fusion (PR #39505, May 1 2026)
+4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap; multimodal scheduler overhead reduction (Apr 2026); HMA KV offload scheduler SWA group support (PR #41228, May 1 2026)
 
 ### KV Cache Compression: Expanding Beyond FP8 (April 2026)
 
@@ -49,6 +49,14 @@ PR #37463 (merged April 2026) adds a CUTLASS-based W4A4 MXFP4 MoE kernel targeti
 ### Calibrated Speculative Decoding: Reducing False Rejections (April 2026)
 
 arXiv 2604.13634 (April 15, 2026) proposes CSD, a training-free addition to speculative decoding that addresses false rejections — cases where a semantically valid draft token is discarded for being lexically different from the target distribution's top token. CSD adds Online Correction Memory (tracks historical rejections to propose rescue candidates) and Semantic Consistency Gating (validates candidates via probability ratio). Peak 2.33× throughput speedup. Not yet integrated into vLLM. See [Speculative Decoding](techniques/speculative-decoding.md). (source: raw/2026-04-19-calibrated-speculative-decoding-arxiv.md)
+
+### KVShot: Why Draft Accuracy Decays at Long Speculation Steps (April 2026)
+
+arXiv 2604.26412 (late April 2026) diagnoses a structural limitation of all hidden-state-based speculative decoding drafters (EAGLE, EAGLE-3, P-EAGLE): acceptance rate decays as speculation step index k increases. The root cause is that the target hidden state is a biased context compression — aligned to the current token position but missing the broader context needed at k > 3. The KVShot framework tests three drafter paradigms (hidden-only, KV-only, hybrid) on Qwen3-8B; KV-Reuse improves long-range acceptance but achieves only marginal end-to-end speedup due to two structural bottlenecks: shallow drafters cannot compute accurate key projections, and KV projection layers receive sparse gradient signals during training. Proposed fix: block-wise training. Not in vLLM. See [Speculative Decoding](techniques/speculative-decoding.md). (source: raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md)
+
+### CapKV: Information-Theoretic KV Cache Eviction (April 2026)
+
+arXiv 2604.25975 (April 28, 2026) replaces heuristic KV cache eviction (H2O, SnapKV, ScissorHands) with a theoretically grounded Information Bottleneck objective. Under a linear-Gaussian attention surrogate, the optimal retained KV subset maximizes mutual information with future attention outputs — approximated by log-determinant maximization via statistical leverage scores. Consistently outperforms all tested heuristic methods at high compression ratios on long-context benchmarks. Not in vLLM. See [KV Cache Management](concepts/kv-cache-management.md). (source: raw/2026-05-01-arxiv-2604-25975-capkv.md)
 
 ## Glossary (quick reference)
 
