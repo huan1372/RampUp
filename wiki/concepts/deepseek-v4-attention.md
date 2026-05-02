@@ -1,10 +1,10 @@
 ---
 title: "DeepSeek V4 Hybrid Attention (CSA + HCA + mHC)"
-tags: [attention, long-context, sparse-attention, kv-cache, deepseek, moe, architecture, tool-calling]
+tags: [attention, long-context, sparse-attention, kv-cache, deepseek, moe, architecture, tool-calling, kernel-fusion, tilelang, mla]
 created: 2026-04-24
-updated: 2026-04-27
-sources: [raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md]
-related: [concepts/kv-cache-management.md, concepts/paged-attention.md, techniques/kv-cache-quantization.md, techniques/disaggregated-serving.md, techniques/speculative-decoding.md]
+updated: 2026-05-02
+sources: [raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-05-02-vllm-prs-may2.md]
+related: [concepts/kv-cache-management.md, concepts/paged-attention.md, concepts/model-runner-v2.md, techniques/kv-cache-quantization.md, techniques/disaggregated-serving.md, techniques/speculative-decoding.md]
 ---
 
 # DeepSeek V4 Hybrid Attention (CSA + HCA + mHC)
@@ -120,6 +120,50 @@ No external quality benchmarks (MMLU, HumanEval, etc.) available from sources co
 - Will vLLM eventually support CSA-style retrieval for other models, or is this V4-specific?
 - Does vLLM's PagedAttention block allocator handle compressed CSA blocks, or is a separate allocator used?
 
+## Performance Optimization (May 1, 2026)
+
+### head_compute_mix_kernel: TileLang Tile Kernel for MHC Attention (PR #41255)
+
+PR #41255 ports `head_compute_mix_kernel` from DeepSeek's TileKernels repository into vLLM. This kernel targets the **multi-head collective (MHC) attention** mechanism in V4's hybrid stack, fusing the head computation mixing step that processes hidden states through the specialized MHC attention variant.
+
+The kernel is implemented in **TileLang** — a tile-level DSL for GPU kernel authoring — with configurable `h_block` and `n_thr` parameters explicitly tuned for Blackwell architecture.
+
+**Benchmarks** (SPEED-Bench, 500 prompts, 4×GB200):
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Request throughput | 4.57 req/s | 4.99 req/s | +9.2% |
+| Output tok/s | 1083 | 1160 | +7.1% |
+| Total tok/s | 47,876 | 52,266 | +9.2% |
+| Mean TTFT | 51.2 ms | 48.1 ms | −6.1% |
+
+**Scope:** MHC layers in DeepSeek-V4 and V4-Flash only. Other attention variants (MLA, CSA, HCA standard kernel path) unaffected. Blackwell (GB200) tested.
+
+**Connection to earlier work:** This follows the pattern established by PR #38877 (MLA+FP8 fusion, April 22, 2026) — both are targeted kernel fusions within the DeepSeek attention stack, applied to different attention sub-types.
+
+(source: raw/2026-05-02-vllm-prs-may2.md)
+
+### MLA Prefill Backend Abstraction + cuDNN Elimination (PR #32623)
+
+PR #32623 introduces a unified `--attention-config.mla_prefill_backend` flag for selecting the MLA prefill backend at runtime, mirroring the existing decode backend abstraction.
+
+**Available backends:**
+- `flashinfer` — **new default** (previously CUTLASS MLA was default)
+- `trtllm_ragged_deepseek` — TRT-LLM ragged DeepSeek implementation
+
+**cuDNN removed:** The cuDNN MLA prefill backend is eliminated; it was "generally not used" in production.
+
+**Deprecated flags** (backward-compatible; emit deprecation warnings):
+- `use_cudnn_prefill`
+- `use_trtllm_ragged_deepseek_prefill`
+- `disable_flashinfer_prefill`
+
+**Performance:** Default changes from CUTLASS MLA to FlashInfer MLA. No benchmark comparison captured; the PR notes "TBD."
+
+**Architectural significance:** Enables programmatic backend selection without recompilation, consistent with the MRV2 pluggable backend philosophy. Backend-specific logic is now isolated in separate files rather than branching inline. See [Model Runner V2](model-runner-v2.md).
+
+(source: raw/2026-05-02-vllm-prs-may2.md)
+
 ## Post-Release Fixes (April 26, 2026)
 
 ### DSML Token Leakage in Streaming Tool Calls (PR #40806)
@@ -142,8 +186,23 @@ DeepSeek V4's shared expert uses a SiLU (`silu_and_mul`) activation. At extreme 
 
 (source: raw/2026-04-27-vllm-prs-apr26-27.md)
 
+## Open Questions
+
+- What is CSA's compression group size m and top-k retrieval count k?
+- How does the Lightning Indexer work — learned dense scorer, content-hash, or attention-based?
+- At what context length does V4-Pro outperform V3.2 in throughput (breakeven for CSA/HCA overhead vs KV savings)?
+- What quality cost does HCA's 128-token compression impose on long-document recall tasks?
+- Does mHC's Sinkhorn normalization add meaningful training overhead?
+- What is the KV transfer volume in disaggregated serving for a V4-Pro 1M-token request?
+- Will vLLM eventually support CSA-style retrieval for other models, or is this V4-specific?
+- Does vLLM's PagedAttention block allocator handle compressed CSA blocks, or is a separate allocator used?
+- Does the default FlashInfer MLA prefill backend (PR #32623) outperform the previous CUTLASS MLA default? No benchmark captured.
+- Does `head_compute_mix_kernel` (PR #41255) benefit V4-Flash on Hopper (H100/H200) or is the TileLang kernel Blackwell-only?
+- Are additional TileKernels from DeepSeek's repository planned for porting (CSA indexer, HCA compression step)?
+
 ## Sources
 
 - [raw/2026-04-24-deepseek-v4-vllm.md](../../raw/2026-04-24-deepseek-v4-vllm.md) — primary source for all DeepSeek V4 architecture details and vLLM implementation
 - [raw/2026-04-26-vllm-prs-apr25-26.md](../../raw/2026-04-26-vllm-prs-apr25-26.md) — DSML streaming fix (PR #40806)
 - [raw/2026-04-27-vllm-prs-apr26-27.md](../../raw/2026-04-27-vllm-prs-apr26-27.md) — SiLU clamp for shared expert (PR #40950)
+- [raw/2026-05-02-vllm-prs-may2.md](../../raw/2026-05-02-vllm-prs-may2.md) — head_compute_mix_kernel (PR #41255); MLA prefill backend abstraction (PR #32623)

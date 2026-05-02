@@ -2,7 +2,7 @@
 title: "Master Index"
 tags: [index, meta]
 created: 2026-04-14
-updated: 2026-05-01
+updated: 2026-05-02
 ---
 
 
@@ -15,9 +15,9 @@ updated: 2026-05-01
 - [PagedAttention](concepts/paged-attention.md) — virtual memory for KV cache; Ragged Paged Attention for TPU: 86% MBU decode, 73% MFU prefill, 5× throughput (arXiv 2604.15464, Apr 2026)
 - [Continuous Batching](concepts/continuous-batching.md) — dynamic request scheduling
 - [Chunked Prefill](concepts/chunked-prefill.md) — splitting long-context prefills; StepPool embedding alignment fix for 4K+ token sequences (PR #41049, Apr 28 2026)
-- [KV Cache Management](concepts/kv-cache-management.md) — memory allocation strategies; TTKV temporal tiering (76% latency reduction on 128K ctx, arXiv 2604.19769); HybridGen CPU-GPU hybrid attention (1.41×–3.2× throughput, arXiv 2604.18529); HMA multi-group KV offload store (PR #39403, Apr 25 2026); SWA/chunked-local scheduler admission deadlock fix (PR #40946, Apr 27 2026); HMA KV offload SWA group support (PR #41228, May 1 2026); CapKV information-theoretic eviction via leverage scores, outperforms H2O/SnapKV on long-context (arXiv 2604.25975, Apr 28 2026)
-- [Model Runner V2](concepts/model-runner-v2.md) — vLLM's new execution core; warm compile time −88–96% via FX graph inlining (PR #40151, Apr 23 2026); RayExecutorV2 + AOT batch-invariance in v0.20.0; Eagle prefill metadata skip ~5-10% latency improvement (PR #40410, Apr 27 2026)
-- [DeepSeek V4 Hybrid Attention](concepts/deepseek-v4-attention.md) — CSA + HCA + mHC; 10% of V3.2's KV cache at 1M context; vLLM day-0 support (Apr 24 2026); DSML streaming fix (PR #40806, Apr 26 2026); SiLU clamp for shared expert (PR #40950, Apr 27 2026)
+- [KV Cache Management](concepts/kv-cache-management.md) — memory allocation strategies; TTKV temporal tiering (76% latency reduction on 128K ctx, arXiv 2604.19769); HybridGen CPU-GPU hybrid attention (1.41×–3.2× throughput, arXiv 2604.18529); HMA KV offload series complete: PR #41445 (13/N final, May 1 2026) — offloading now supports multi-group, SWA, heterogeneous block sizes including DeepSeek V4 family; CapKV information-theoretic eviction via leverage scores, outperforms H2O/SnapKV on long-context (arXiv 2604.25975, Apr 28 2026)
+- [Model Runner V2](concepts/model-runner-v2.md) — vLLM's new execution core; warm compile time −88–96% via FX graph inlining (PR #40151, Apr 23 2026); RayExecutorV2 + AOT batch-invariance in v0.20.0; Eagle prefill metadata skip ~5-10% latency improvement (PR #40410, Apr 27 2026); MLA prefill backend abstraction: `--attention-config.mla_prefill_backend` flag, FlashInfer new default, cuDNN eliminated (PR #32623, May 1 2026)
+- [DeepSeek V4 Hybrid Attention](concepts/deepseek-v4-attention.md) — CSA + HCA + mHC; 10% of V3.2's KV cache at 1M context; vLLM day-0 support (Apr 24 2026); DSML streaming fix (PR #40806, Apr 26 2026); SiLU clamp for shared expert (PR #40950, Apr 27 2026); TileLang head_compute_mix_kernel for MHC: +7–9% throughput on 4×GB200 (PR #41255, May 1 2026); MLA prefill backend abstraction (PR #32623, May 1 2026)
 
 ## Techniques
 - [FP8 Quantization](techniques/fp8-quantization.md) — near-free 2x memory reduction; MLA+Group FP8 fusion for DeepSeek (PR #38877, Apr 22 2026); Humming JIT kernel W{1–8}A{16/8/4} (PR #34556, Apr 24 2026, ~1.58× over Marlin on H20); FP8 FlashInfer ViT attention for Qwen3 VL (PR #38065, Apr 27 2026, 1.18× at 4K/GB200); FP8 per-token group quant packed kernel for Blackwell (PR #41326, May 1 2026); FlashInfer FP8 async TP allreduce fusion (PR #39505, May 1 2026)
@@ -47,3 +47,4 @@ updated: 2026-05-01
 - [Collect run 2026-04-28](changelog/collect-2026-04-28.md) — vLLM post-v0.20.0 PRs: Eagle prefill metadata skip (PR #40410, ~5-10% latency); independent drafter attention backend selection (PR #39930); StepPool embedding alignment fix for chunked prefill (PR #41049); TRTLLM MoE routing update with SigmoidRenorm+MiniMax2 (PR #39141)
 - [Collect run 2026-04-30](changelog/collect-2026-04-30.md) — arXiv 2604.19767: EAGLE3 production study on PayPal commerce agent (22-49% throughput, 18-33% latency, 50% GPU cost vs NIM, gamma=3 acceptance 35.5% stable); no new vLLM release; no material perf PRs from Apr 29-30
 - [Collect run 2026-05-01](changelog/collect-2026-05-01.md) — 3 vLLM PRs merged May 1 (PR #41326 FP8 Blackwell packed kernel; PR #39505 FlashInfer FP8 async TP fusion; PR #41228 HMA KV offload SWA group scheduler); arXiv 2604.25975 CapKV information-theoretic KV eviction; arXiv 2604.26412 KVShot long-range draft accuracy analysis; no new vLLM release; no new blog.vllm.ai post
+- [Collect run 2026-05-02](changelog/collect-2026-05-02.md) — vLLM PRs May 1–2: DeepSeek-V4 TileLang MHC kernel (+7–9%, PR #41255); HMA KV offload series final (PR #41445, 13/N complete); MLA prefill backend abstraction + cuDNN elimination (PR #32623); no new arXiv 2605 papers; no new vLLM release; no new blog.vllm.ai post

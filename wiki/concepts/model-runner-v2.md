@@ -1,10 +1,10 @@
 ---
 title: "Model Runner V2 (MRV2)"
-tags: [vllm-core, architecture, execution, compile-time, torch-compile, ray, aot]
+tags: [vllm-core, architecture, execution, compile-time, torch-compile, ray, aot, mla, attention-backend]
 created: 2026-04-14
-updated: 2026-04-28
-sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-28-vllm-prs-apr27-28.md]
-related: [concepts/paged-attention.md, techniques/speculative-decoding.md, techniques/tensor-parallelism.md]
+updated: 2026-05-02
+sources: [raw/vllm-releases.md, raw/vllm-roadmap-q2-2026.md, raw/2026-04-15-model-runner-v2-blog.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-05-02-vllm-prs-may2.md]
+related: [concepts/paged-attention.md, concepts/deepseek-v4-attention.md, techniques/speculative-decoding.md, techniques/tensor-parallelism.md]
 ---
 
 # Model Runner V2 (MRV2)
@@ -111,6 +111,20 @@ This complements the earlier v0.20.0 change that added full CUDA graph capture f
 
 (source: raw/2026-04-28-vllm-prs-apr27-28.md)
 
+## MLA Prefill Backend Selection (PR #32623, May 1, 2026)
+
+PR #32623 adds `--attention-config.mla_prefill_backend` as a new runtime flag for selecting the MLA prefill backend, extending MRV2's pluggable backend philosophy to the MLA prefill path (previously MLA decode backend was selectable; now prefill is too).
+
+**Default changed:** CUTLASS MLA → FlashInfer MLA. Old flags (`use_cudnn_prefill`, `use_trtllm_ragged_deepseek_prefill`, `disable_flashinfer_prefill`) deprecated with backward-compatible warnings.
+
+**cuDNN eliminated:** cuDNN MLA prefill backend removed — it was not used in production and added maintenance burden.
+
+**Architectural note:** Backend-specific code is now in isolated files, consistent with the MRV2 modularity goal (the original MRV2 design had backend isolation as a first-class requirement; the MLA prefill path had remained monolithic until this PR).
+
+For full details including backend options and performance notes, see [DeepSeek V4 Hybrid Attention](deepseek-v4-attention.md).
+
+(source: raw/2026-05-02-vllm-prs-may2.md)
+
 ## Open Questions
 - Which models still require MRV1 as of v0.20.0? When will they migrate?
 - Cold compile times remain unaddressed by PR #40151 — what is the cold compile time for DeepSeek-V3.2 and does it remain a production concern?
@@ -119,3 +133,4 @@ This complements the earlier v0.20.0 change that added full CUDA graph capture f
 - What speedup does AOT batch-invariance mode provide in practice (vs per-batch-size recompilation)?
 - How does RayExecutorV2 differ from the previous Ray executor in terms of state management and failure recovery?
 - Does FX graph splitting via codegen enable MRV2 to run on heterogeneous GPU clusters (different SM versions in the same fleet)?
+- Does changing the MLA prefill default from CUTLASS to FlashInfer (PR #32623) affect MRV2 compile graph size or trace correctness?

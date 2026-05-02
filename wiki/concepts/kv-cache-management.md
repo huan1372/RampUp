@@ -1,10 +1,10 @@
 ---
 title: "KV Cache Management"
-tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu, eviction, information-theory, swa]
+tags: [memory, kv-cache, vllm-core, offloading, cuda-graph, sequential-compression, tiering, cpu-gpu, eviction, information-theory, swa, hma]
 created: 2026-04-14
-updated: 2026-05-01
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-vllm-prs-may1.md]
-related: [concepts/paged-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
+updated: 2026-05-02
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-releases.md, raw/2026-04-15-vllm-v019-release.md, raw/2026-04-15-async-kv-prefetch-arxiv.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-vllm-prs-may1.md, raw/2026-05-02-vllm-prs-may2.md]
+related: [concepts/paged-attention.md, concepts/deepseek-v4-attention.md, techniques/prefix-caching.md, techniques/fp8-quantization.md, techniques/kv-cache-quantization.md, techniques/cross-layer-kv-compression.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
 # KV Cache Management
@@ -92,6 +92,30 @@ Part 11 of an ongoing HMA (Hierarchical Multi-token Attention) KV offload series
 **Context:** This enables KV cache offloading for HMA-class architectures (e.g., DeepSeek V4's CSA/HCA multi-tier KV layout). Prior to this series, the KV offloader could not function with multi-group KV cache layouts at all. No benchmark numbers — prerequisite infrastructure PR.
 
 (source: raw/2026-04-26-vllm-prs-apr25-26.md)
+
+### HMA KV Offload Series: Complete (PR #41445, May 1, 2026)
+
+PR #41445 is the **final PR (13/N)** in the HMA KV offload series. The offloading connector now advertises `SupportsHMA`, formally marking the series complete. HMA is defined as models with: multiple KV cache groups, sliding window attention, or varying block sizes across groups.
+
+**Capabilities unlocked:**
+- Full-attention + SWA hybrid architectures (Mistral-class, Gemma variants) — can now use KV offloading
+- MLA-based architectures with CSA+HCA+mHC multi-tier KV layout (DeepSeek V4 family)
+- Any model with heterogeneous block sizes across attention groups
+
+**Validated:** Qwen 3.6 B model with `--kv-offloading-size 16` confirmed working by external user.
+
+**Series milestones in full:**
+
+| PR | Date | Change |
+|----|------|--------|
+| #38453 | Apr 22 | Multi-group KV transfer |
+| #39403 | Apr 25 | Multi-group KV store |
+| #41228 | May 1 | SWA group support in scheduler |
+| #41445 | May 1 | Final connector enablement (`SupportsHMA`); unit + e2e tests |
+
+Prior to this series, KV offloading was limited to single-group, uniform-block architectures only.
+
+(source: raw/2026-05-02-vllm-prs-may2.md)
 
 ### HMA KV Offload Scheduler: Sliding Window Group Support (PR #41228, May 1, 2026)
 
@@ -230,6 +254,8 @@ where Kₛ is the key matrix of retained entries — a **log-determinant maximiz
 - [CPU-GPU Hybrid Attention](../techniques/cpu-gpu-hybrid-attention.md) — HybridGen: CPU as active compute participant for KV-resident attention (arXiv 2604.18529)
 
 ## Open Questions
+- Now that the HMA KV offload series (PR #41445) is complete, what is the throughput overhead of KV offloading for DeepSeek V4-Pro (multi-tier CSA+HCA layout) vs. single-group architectures?
+- Does `--kv-offloading-size` need to be tuned per architecture class (single-group vs. SWA vs. multi-group MHC) for optimal offloading efficiency?
 - How does CapKV's leverage-score approximation scale with context length? At what n does O(n) per step become a bottleneck relative to attention compute?
 - Can CapKV be combined with TTKV (temporal tiering) — use tiering to partition "keep in HBM / move to DRAM" and CapKV to decide what to evict entirely?
 - Does the IB formulation in CapKV degrade for multi-query or grouped-query attention where the key matrix structure differs from the linear-Gaussian surrogate assumption?

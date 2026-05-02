@@ -2,8 +2,8 @@
 title: "Overview & Synthesis"
 tags: [overview, synthesis, meta]
 created: 2026-04-14
-updated: 2026-05-01
-sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md, raw/2026-05-01-vllm-prs-may1.md]
+updated: 2026-05-02
+sources: [raw/vllm-roadmap-q2-2026.md, raw/vllm-benchmarks-2026.md, raw/vllm-releases.md, raw/2026-04-14-vllm-rampup-recap.md, raw/2026-04-16-turboquant-kv-compression-pr38479.md, raw/2026-04-19-vllm-prs-apr17-19.md, raw/2026-04-19-calibrated-speculative-decoding-arxiv.md, raw/2026-04-20-specguard-arxiv-2604-15244.md, raw/2026-04-20-streamserve-arxiv-2604-09562.md, raw/2026-04-20-prefill-as-a-service-arxiv-2604-15039.md, raw/2026-04-21-vllm-v0191-release.md, raw/2026-04-21-yoco-plus-arxiv.md, raw/2026-04-21-fp16-kv-divergence-arxiv.md, raw/2026-04-22-vllm-prs-apr21-22.md, raw/2026-04-22-isoquant-arxiv.md, raw/2026-04-22-sequential-kv-trie-arxiv.md, raw/2026-04-23-vllm-prs-apr22-23.md, raw/2026-04-24-vllm-v020-release.md, raw/2026-04-24-deepseek-v4-vllm.md, raw/2026-04-24-vllm-prs-apr23-24.md, raw/2026-04-24-ttkv-arxiv.md, raw/2026-04-24-hybridgen-arxiv.md, raw/2026-04-24-smc-sd-arxiv.md, raw/2026-04-24-grace-kv-arxiv.md, raw/2026-04-24-realb-moe-arxiv.md, raw/2026-04-24-ragged-paged-attention-tpu-arxiv.md, raw/2026-04-25-vllm-prs-apr24-25.md, raw/2026-04-26-vllm-prs-apr25-26.md, raw/2026-04-26-dip-sd-arxiv-2604-20919.md, raw/2026-04-27-vllm-prs-apr26-27.md, raw/2026-04-28-vllm-prs-apr27-28.md, raw/2026-04-30-paypal-eagle3-production-arxiv-2604-19767.md, raw/2026-05-01-arxiv-2604-25975-capkv.md, raw/2026-05-01-arxiv-2604-26412-kvshot-speculative.md, raw/2026-05-01-vllm-prs-may1.md, raw/2026-05-02-vllm-prs-may2.md]
 related: [concepts/paged-attention.md, concepts/model-runner-v2.md, concepts/continuous-batching.md, concepts/chunked-prefill.md, concepts/deepseek-v4-attention.md, techniques/cpu-gpu-hybrid-attention.md]
 ---
 
@@ -34,9 +34,9 @@ Based on Clarifai benchmarks (GPT-OSS-120B on 2x H100):
 ## Key Optimization Vectors
 
 1. **Memory** — PagedAttention, KV cache offloading to CPU, FP8/FP4 quantization, sub-FP8 KV compression (TurboQuant: 2.6–4.9×, merged Apr 2026; WHT overhead reduced Apr 2026), cross-layer KV compression (YOCO++: 50% KV reduction via architecture, Apr 2026 research); CapKV information-theoretic eviction via leverage scores (outperforms H2O/SnapKV, Apr 28 2026 research)
-2. **Compute** — speculative decoding (P-EAGLE 1.55–1.69×; CSD 2.33× peak, Apr 2026; Eagle3 + Gemma4 v0.19.1); FP8 per-token group quant packed kernel for Blackwell (PR #41326, May 1 2026); continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
+2. **Compute** — speculative decoding (P-EAGLE 1.55–1.69×; CSD 2.33× peak, Apr 2026; Eagle3 + Gemma4 v0.19.1); FP8 per-token group quant packed kernel for Blackwell (PR #41326, May 1 2026); TileLang head_compute_mix_kernel for DeepSeek-V4 MHC (+7–9% throughput on 4×GB200, PR #41255, May 1 2026); continuous batching, chunked prefill, fused kernels; MXFP4 W4A4 CUTLASS MoE kernel for B200 (Apr 2026)
 3. **Scale** — tensor/pipeline/expert parallelism, disaggregated prefill-decode, elastic serving; FlashInfer FP8 async TP allreduce fusion (PR #39505, May 1 2026)
-4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap; multimodal scheduler overhead reduction (Apr 2026); HMA KV offload scheduler SWA group support (PR #41228, May 1 2026)
+4. **Scheduling** — DBO (Dual-Batch Overlap), async scheduling with zero-bubble overlap; multimodal scheduler overhead reduction (Apr 2026); HMA KV offload series complete (PR #41445 = 13/N, May 1 2026 — KV offloading now works for multi-group, SWA, and heterogeneous block-size architectures including DeepSeek V4 family)
 
 ### KV Cache Compression: Expanding Beyond FP8 (April 2026)
 
@@ -237,6 +237,18 @@ No new numbered release. Four PRs merged:
 - **PR #39141 (Apr 27) — TRTLLM MoE routing method update**: Adds `SigmoidRenorm` and `MiniMax2` routing methods to TRT-LLM MoE backend, aligned with FlashInfer v0.6.8. Reclassifies `Custom`/`Simulated` as internal vLLM-specific. Performance improvement for MiniMax-series model serving via TRT-LLM backend. See [Tensor Parallelism](techniques/tensor-parallelism.md).
 
 (source: raw/2026-04-28-vllm-prs-apr27-28.md)
+
+### vLLM PRs May 1–2, 2026: DeepSeek-V4 Kernel Tuning + HMA Completion + MLA Abstraction
+
+Three inference-relevant PRs from May 1–2, 2026:
+
+**PR #41255 — head_compute_mix_kernel for DeepSeek-V4 MHC (+7–9%, May 1):** Ports a TileLang tile kernel from DeepSeek's TileKernels repository, fusing the head computation mixing step in V4's multi-head collective (MHC) attention. Benchmarked on SPEED-Bench (500 prompts, 4×GB200): +9.2% request throughput, +7.1% output tok/s, −6.1% TTFT. This is the first model-specific TileLang kernel in vLLM mainline — a signal that the team is pursuing architecture-native kernel authoring beyond CUTLASS/FlashInfer defaults for flagship models.
+
+**PR #41445 — HMA KV Offload Final Enablement (13/N, May 1):** Completes the HMA KV offload series by having the connector advertise `SupportsHMA`. KV cache offloading now works for all architecture classes: single-group, multi-group (MLA), SWA+full hybrid, and varying block sizes. The series took approximately 3 weeks (Apr 22 → May 1) across 13 PRs. Validated with Qwen 3.6 B + `--kv-offloading-size 16`. This is a significant capability milestone: before the series, KV offloading was limited to simple homogeneous architectures; now it extends to the full complexity of production models like DeepSeek V4.
+
+**PR #32623 — MLA Prefill Backend Abstraction (May 1):** Adds `--attention-config.mla_prefill_backend` flag; removes cuDNN backend (not production-used); shifts default from CUTLASS MLA to FlashInfer MLA. This completes the backend abstraction symmetry for MLA: decode was already selectable, now prefill is too.
+
+(source: raw/2026-05-02-vllm-prs-may2.md)
 
 ### EAGLE3 in Production: PayPal Commerce Agent (arXiv 2604.19767, April 2026)
 
